@@ -35,6 +35,34 @@ void initWindow()
   cv::createTrackbar("Filter Value [0-100]", "window_name", nullptr, 100, 0); 
 }
 
+// Convert from RGB to HSI
+cv::Mat rgbToHSI(const cv::Mat & rgb_image)
+{
+  float r,g,b;
+  float H,S,I;
+  cv::Mat hsi(rgb_image.rows, rgb_image.cols, rgb_image.type());
+
+  for (int i = 0; i < rgb_image.rows; i++) {
+    for (int j = 0; j < rgb_image.cols; j++) {
+      b = ((float)rgb_image.at<cv::Vec3b>(i,j)[0]) / 255;
+      g = ((float)rgb_image.at<cv::Vec3b>(i,j)[1]) / 255;
+      r = ((float)rgb_image.at<cv::Vec3b>(i,j)[2]) / 255;
+
+      H = std::acos((((r-g)+(r-b))/2) / std::sqrt((r-g)*(r-g) + (r-g)*(g-b)));
+      S = 1 - (3*(std::min(r, std::min(b,g))))/(r+g+b);
+      I = (r+g+b) / 3;
+
+      if (b > g) H = 360 - H;
+
+      hsi.at<cv::Vec3b>(i, j)[0] = (H / 360) *255 ;
+      hsi.at<cv::Vec3b>(i, j)[1] = S*255;
+      hsi.at<cv::Vec3b>(i, j)[2] = I*255;
+    }
+  }
+
+  return hsi;
+}
+
 // Compute the Discrete fourier transform
 cv::Mat computeDFT(const cv::Mat & image)
 {
@@ -140,34 +168,36 @@ const
   }
   case 1:
   {
-    uint r,g,b;
-    uint H,S,I;
-    cv::Mat hsi(in_image_rgb.rows, in_image_rgb.cols, in_image_rgb.type());
-
-    for (int i = 0; i < in_image_rgb.rows; i++) {
-      for (int j = 0; j < in_image_rgb.cols; j++) {
-        b = (uint)in_image_rgb.at<cv::Vec3b>(i,j)[0];
-        g = (uint)in_image_rgb.at<cv::Vec3b>(i,j)[1];
-        r = (uint)in_image_rgb.at<cv::Vec3b>(i,j)[2];
-
-        H = 1;
-        S = 1 - (3*(std::min(r, std::min(b,g))))/(r+g+b);
-        I = (1/3)*(r+g+b)*255;
-
-        hsi.at<cv::Vec3b>(i, j)[0] = (H / 360) *255 ;
-        hsi.at<cv::Vec3b>(i, j)[1] = S*255;
-        hsi.at<cv::Vec3b>(i, j)[2] = I*255;
-      }
-    }
-
-    cv::imshow("window_name", hsi);
+    cv::Mat HSI_image = rgbToHSI(in_image_rgb);
+    cv::imshow("window_name", HSI_image);
     break;
   }
   case 2:
   {
     cv::Mat HSV_image;
+    cv::Mat HSI_image = rgbToHSI(in_image_rgb);
     cv::cvtColor(out_image_rgb, HSV_image, cv::COLOR_RGB2HSV);
-    cv::imshow("window_name", HSV_image);;
+
+    std::vector<cv::Mat> three_channels_hsv;
+    cv::split(HSV_image, three_channels_hsv );
+
+    std::vector<cv::Mat> three_channels_hsi;
+    cv::split(HSI_image, three_channels_hsi );
+
+    cv::Mat result_h =  three_channels_hsv[0] - three_channels_hsi[0]; 
+    cv::Mat result_s =  three_channels_hsv[1] - three_channels_hsi[1]; 
+    cv::Mat result_iv = three_channels_hsv[2] - three_channels_hsi[2]; 
+
+    std::vector<cv::Mat> final_channels;
+
+    final_channels.push_back(result_h);
+    final_channels.push_back(result_s);
+    final_channels.push_back(result_iv);
+
+    cv::Mat new_image;
+    cv::merge(final_channels, new_image);
+
+    cv::imshow("window_name", new_image);;
     break;
   }
   case 3:

@@ -131,7 +131,16 @@ const
   out_pointcloud = in_pointcloud;
 
   initWindow();
-  cv::imshow("window_name", out_image_rgb);
+  switch (cv::getTrackbarPos("Option [0-6]", "window_name"))
+  {
+  case 0:
+    cv::imshow("window_name", out_image_rgb);
+    break;
+  
+  default:
+    cv::imshow("window_name", out_image_depth);
+    break;
+  }
   cv::waitKey(3);
 
   return CVGroup(out_image_rgb, out_image_depth, out_pointcloud);

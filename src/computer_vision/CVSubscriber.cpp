@@ -20,6 +20,21 @@
 #include "opencv2/imgcodecs.hpp"
 #include "opencv2/highgui.hpp"
 
+bool has_window = false;
+
+// Create window at the beggining
+void initWindow()
+{
+  if (has_window) return;
+  has_window = true;
+
+  // Show images in a different windows
+  cv::namedWindow("window_name");
+  // create Trackbar and add to a window
+  cv::createTrackbar("Option [0-6]", "window_name", nullptr, 6, 0); 
+  cv::createTrackbar("Filter Value [0-100]", "window_name", nullptr, 100, 0); 
+}
+
 // Compute the Discrete fourier transform
 cv::Mat computeDFT(const cv::Mat & image)
 {
@@ -69,7 +84,6 @@ cv::Mat fftShift(const cv::Mat & magI)
   return magI_copy;
 }
 
-
 // Calculate dft spectrum
 cv::Mat spectrum(const cv::Mat & complexI)
 {
@@ -116,9 +130,8 @@ const
   out_image_depth = in_image_depth;
   out_pointcloud = in_pointcloud;
 
-  // Show images in a different windows
-  cv::imshow("out_image_rgb", out_image_rgb);
-  cv::imshow("out_image_depth", out_image_depth);
+  initWindow();
+  cv::imshow("window_name", out_image_rgb);
   cv::waitKey(3);
 
   return CVGroup(out_image_rgb, out_image_depth, out_pointcloud);

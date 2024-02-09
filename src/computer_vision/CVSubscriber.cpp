@@ -15,7 +15,85 @@
 */
 
 #include "computer_vision/CVSubscriber.hpp"
+#include "opencv2/core.hpp"
+#include "opencv2/imgproc.hpp"
+#include "opencv2/imgcodecs.hpp"
+#include "opencv2/highgui.hpp"
 
+// Compute the Discrete fourier transform
+cv::Mat computeDFT(const cv::Mat & image)
+{
+  // Expand the image to an optimal size.
+  Mat padded;
+  int m = cv::getOptimalDFTSize(image.rows);
+  int n = cv::getOptimalDFTSize(image.cols);     // on the border add zero values
+  cv::copyMakeBorder(
+    image, padded, 0, m - image.rows, 0, n - image.cols, cv::BORDER_CONSTANT, cv::Scalar::all(
+      0));
+
+  // Make place for both the complex and the real values
+  cv::Mat planes[] = {Mat_<float>(padded), Mat::zeros(padded.size(), CV_32F)};
+  cv::Mat complexI;
+  cv::merge(planes, 2, complexI);           // Add to the expanded another plane with zeros
+
+  // Make the Discrete Fourier Transform
+  cv::dft(complexI, complexI, DFT_COMPLEX_OUTPUT);        // this way the result may fit in the source matrix
+  return complexI;
+}
+
+// 6. Crop and rearrange
+cv::Mat fftShift(const cv::Mat & magI)
+{
+  cv::Mat magI_copy = magI.clone();
+  // crop the spectrum, if it has an odd number of rows or columns
+  magI_copy = magI_copy(cv::Rect(0, 0, magI_copy.cols & -2, magI_copy.rows & -2));
+
+  // rearrange the quadrants of Fourier image  so that the origin is at the image center
+  int cx = magI_copy.cols / 2;
+  int cy = magI_copy.rows / 2;
+
+  cv::Mat q0(magI_copy, cv::Rect(0, 0, cx, cy));     // Top-Left - Create a ROI per quadrant
+  cv::Mat q1(magI_copy, cv::Rect(cx, 0, cx, cy));    // Top-Right
+  cv::Mat q2(magI_copy, cv::Rect(0, cy, cx, cy));    // Bottom-Left
+  cv::Mat q3(magI_copy, cv::Rect(cx, cy, cx, cy));   // Bottom-Right
+
+  cv::Mat tmp;                             // swap quadrants (Top-Left with Bottom-Right)
+  q0.copyTo(tmp);
+  q3.copyTo(q0);
+  tmp.copyTo(q3);
+
+  q1.copyTo(tmp);                      // swap quadrant (Top-Right with Bottom-Left)
+  q2.copyTo(q1);
+  tmp.copyTo(q2);
+
+  return magI_copy;
+}
+
+
+// Calculate dft spectrum
+cv::Mat spectrum(const cv::Mat & complexI)
+{
+  cv::Mat complexImg = complexI.clone();
+  // Shift quadrants
+  cv::Mat shift_complex = fftShift(complexImg);
+
+  // Transform the real and complex values to magnitude
+  // compute the magnitude and switch to logarithmic scale
+  // => log(1 + sqrt(Re(DFT(I))^2 + Im(DFT(I))^2))
+  cv::Mat planes_spectrum[2];
+  cv::split(shift_complex, planes_spectrum);         // planes[0] = Re(DFT(I), planes[1] = Im(DFT(I))
+  cv::magnitude(planes_spectrum[0], planes_spectrum[1], planes_spectrum[0]);  // planes[0] = magnitude
+  cv::Mat spectrum = planes_spectrum[0];
+
+  // Switch to a logarithmic scale
+  spectrum += cv::Scalar::all(1);
+  cv::log(spectrum, spectrum);
+
+  // Normalize
+  cv::normalize(spectrum, spectrum, 0, 1, NORM_MINMAX);   // Transform the matrix with float values into a
+                                                      // viewable image form (float between values 0 and 1).
+  return spectrum;
+}
 namespace computer_vision
 {
 

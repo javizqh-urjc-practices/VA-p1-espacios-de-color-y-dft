@@ -134,12 +134,53 @@ const
   switch (cv::getTrackbarPos("Option [0-6]", "window_name"))
   {
   case 0:
+  {
     cv::imshow("window_name", out_image_rgb);
     break;
-  
-  default:
-    cv::imshow("window_name", out_image_depth);
+  }
+  case 1:
+  { 
+    cv::imshow("window_name", out_image_rgb);
     break;
+  }
+  case 2:
+  {
+    cv::imshow("window_name", out_image_rgb);
+    break;
+  }
+  case 3:
+  {
+    cv::Mat BW_opencv;
+    cv::cvtColor(out_image_rgb, BW_opencv, cv::COLOR_RGB2GRAY);
+    // Compute the Discrete fourier transform
+    cv::Mat complexImg = computeDFT(BW_opencv);
+
+    // Get the spectrum
+    cv::Mat spectrum_original = spectrum(complexImg);
+
+    cv::imshow("window_name", spectrum_original);
+    break;
+  }
+  case 4:
+  {
+    cv::imshow("window_name", out_image_rgb);
+    break;
+  }
+  case 5:
+  {
+    cv::imshow("window_name", out_image_rgb);
+    break;
+  }
+  case 6:
+  {
+    cv::imshow("window_name", out_image_rgb);
+    break;
+  }
+  default:
+  {
+    cv::imshow("window_name", out_image_rgb);
+    break;
+  }
   }
   cv::waitKey(3);
 

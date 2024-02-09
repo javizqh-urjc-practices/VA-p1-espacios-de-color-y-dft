@@ -139,13 +139,35 @@ const
     break;
   }
   case 1:
-  { 
-    cv::imshow("window_name", out_image_rgb);
+  {
+    uint r,g,b;
+    uint H,S,I;
+    cv::Mat hsi(in_image_rgb.rows, in_image_rgb.cols, in_image_rgb.type());
+
+    for (int i = 0; i < in_image_rgb.rows; i++) {
+      for (int j = 0; j < in_image_rgb.cols; j++) {
+        b = (uint)in_image_rgb.at<cv::Vec3b>(i,j)[0];
+        g = (uint)in_image_rgb.at<cv::Vec3b>(i,j)[1];
+        r = (uint)in_image_rgb.at<cv::Vec3b>(i,j)[2];
+
+        H = 1;
+        S = 1 - (3*(std::min(r, std::min(b,g))))/(r+g+b);
+        I = (1/3)*(r+g+b)*255;
+
+        hsi.at<cv::Vec3b>(i, j)[0] = (H / 360) *255 ;
+        hsi.at<cv::Vec3b>(i, j)[1] = S*255;
+        hsi.at<cv::Vec3b>(i, j)[2] = I*255;
+      }
+    }
+
+    cv::imshow("window_name", hsi);
     break;
   }
   case 2:
   {
-    cv::imshow("window_name", out_image_rgb);
+    cv::Mat HSV_image;
+    cv::cvtColor(out_image_rgb, HSV_image, cv::COLOR_RGB2HSV);
+    cv::imshow("window_name", HSV_image);;
     break;
   }
   case 3:

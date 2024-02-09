@@ -215,12 +215,78 @@ const
   }
   case 4:
   {
-    cv::imshow("window_name", out_image_rgb);
+    cv::Mat BW_opencv;
+    cv::cvtColor(out_image_rgb, BW_opencv, cv::COLOR_RGB2GRAY);
+    // Compute the Discrete fourier transform
+    cv::Mat complexImg = computeDFT(BW_opencv);
+
+    // Crop and rearrange
+    cv::Mat shift_complex = fftShift(complexImg); // Rearrange quadrants - Spectrum with low
+
+    cv::Mat tmp(in_image_rgb.rows, in_image_rgb.cols, CV_32F);
+    cv::Point center(in_image_rgb.rows / 2, in_image_rgb.cols / 2); // Is always even
+
+    for (int i = 0; i < in_image_rgb.rows; i++) {
+      for (int j = 0; j < in_image_rgb.cols; j++) {
+        if ((i == center.x || i == center.x + 1)) {
+        // if ((i == center.x || i == center.x + 1) && (j >= center.y - 50 && j <= center.y + 50)) {
+          tmp.at<float>(i, j) = (float)1;
+        } else {
+          tmp.at<float>(i, j) = (float)0;
+        }
+      }
+    }
+
+    cv::Mat toMerge[] = {tmp, tmp};
+    cv::Mat dft_Filter;
+    cv::merge(toMerge, 2, dft_Filter);
+
+    cv::mulSpectrums(shift_complex,dft_Filter,shift_complex,0);
+    cv::Mat rearrange = fftShift(shift_complex);
+
+    // Get the spectrum
+    cv::Mat inverseTransform;
+    cv::idft(rearrange, inverseTransform, cv::DFT_INVERSE | cv::DFT_REAL_OUTPUT);
+    cv::normalize(inverseTransform, inverseTransform, 0, 1, cv::NORM_MINMAX);
+    cv::imshow("window_name", inverseTransform);
     break;
   }
   case 5:
   {
-    cv::imshow("window_name", out_image_rgb);
+cv::Mat BW_opencv;
+    cv::cvtColor(out_image_rgb, BW_opencv, cv::COLOR_RGB2GRAY);
+    // Compute the Discrete fourier transform
+    cv::Mat complexImg = computeDFT(BW_opencv);
+
+    // Crop and rearrange
+    cv::Mat shift_complex = fftShift(complexImg); // Rearrange quadrants - Spectrum with low
+
+    cv::Mat tmp(in_image_rgb.rows, in_image_rgb.cols, CV_32F);
+    cv::Point center(in_image_rgb.rows / 2, in_image_rgb.cols / 2); // Is always even
+
+    for (int i = 0; i < in_image_rgb.rows; i++) {
+      for (int j = 0; j < in_image_rgb.cols; j++) {
+        // if ((i == center.x || i == center.x + 1)) {
+        if ((i == center.x || i == center.x + 1) && (j >= center.y - 50 && j <= center.y + 50)) {
+          tmp.at<float>(i, j) = (float)0;
+        } else {
+          tmp.at<float>(i, j) = (float)1;
+        }
+      }
+    }
+
+    cv::Mat toMerge[] = {tmp, tmp};
+    cv::Mat dft_Filter;
+    cv::merge(toMerge, 2, dft_Filter);
+
+    cv::mulSpectrums(shift_complex,dft_Filter,shift_complex,0);
+    cv::Mat rearrange = fftShift(shift_complex);
+
+    // Get the spectrum
+    cv::Mat inverseTransform;
+    cv::idft(rearrange, inverseTransform, cv::DFT_INVERSE | cv::DFT_REAL_OUTPUT);
+    cv::normalize(inverseTransform, inverseTransform, 0, 1, cv::NORM_MINMAX);
+    cv::imshow("window_name", inverseTransform);
     break;
   }
   case 6:

@@ -24,7 +24,7 @@
 cv::Mat computeDFT(const cv::Mat & image)
 {
   // Expand the image to an optimal size.
-  Mat padded;
+  cv::Mat padded;
   int m = cv::getOptimalDFTSize(image.rows);
   int n = cv::getOptimalDFTSize(image.cols);     // on the border add zero values
   cv::copyMakeBorder(
@@ -32,12 +32,12 @@ cv::Mat computeDFT(const cv::Mat & image)
       0));
 
   // Make place for both the complex and the real values
-  cv::Mat planes[] = {Mat_<float>(padded), Mat::zeros(padded.size(), CV_32F)};
+  cv::Mat planes[] = {cv::Mat_<float>(padded), cv::Mat::zeros(padded.size(), CV_32F)};
   cv::Mat complexI;
   cv::merge(planes, 2, complexI);           // Add to the expanded another plane with zeros
 
   // Make the Discrete Fourier Transform
-  cv::dft(complexI, complexI, DFT_COMPLEX_OUTPUT);        // this way the result may fit in the source matrix
+  cv::dft(complexI, complexI, cv::DFT_COMPLEX_OUTPUT);        // this way the result may fit in the source matrix
   return complexI;
 }
 
@@ -90,7 +90,7 @@ cv::Mat spectrum(const cv::Mat & complexI)
   cv::log(spectrum, spectrum);
 
   // Normalize
-  cv::normalize(spectrum, spectrum, 0, 1, NORM_MINMAX);   // Transform the matrix with float values into a
+  cv::normalize(spectrum, spectrum, 0, 1, cv::NORM_MINMAX);   // Transform the matrix with float values into a
                                                       // viewable image form (float between values 0 and 1).
   return spectrum;
 }

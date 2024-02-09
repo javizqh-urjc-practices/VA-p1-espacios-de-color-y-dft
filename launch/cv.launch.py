@@ -15,12 +15,11 @@
 from launch import LaunchDescription
 from launch_ros.actions import Node
 
-
 def generate_launch_description():
 
     return LaunchDescription([
         Node(
-            package='computer_vision',
+            package='practica1-grupo5',
             namespace='computer_vision',
             executable='cv_program',
             output='both',

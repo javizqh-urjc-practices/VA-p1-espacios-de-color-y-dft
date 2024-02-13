@@ -229,7 +229,6 @@ const
     for (int i = 0; i < in_image_rgb.rows; i++) {
       for (int j = 0; j < in_image_rgb.cols; j++) {
         if ((i == center.x || i == center.x + 1)) {
-        // if ((i == center.x || i == center.x + 1) && (j >= center.y - 50 && j <= center.y + 50)) {
           tmp.at<float>(i, j) = (float)1;
         } else {
           tmp.at<float>(i, j) = (float)0;
@@ -266,8 +265,7 @@ cv::Mat BW_opencv;
 
     for (int i = 0; i < in_image_rgb.rows; i++) {
       for (int j = 0; j < in_image_rgb.cols; j++) {
-        // if ((i == center.x || i == center.x + 1)) {
-        if ((i == center.x || i == center.x + 1) && (j >= center.y - 50 && j <= center.y + 50)) {
+        if ((i == center.x || i == center.x + 1)) {
           tmp.at<float>(i, j) = (float)0;
         } else {
           tmp.at<float>(i, j) = (float)1;

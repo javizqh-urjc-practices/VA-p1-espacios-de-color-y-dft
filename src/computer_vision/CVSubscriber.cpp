@@ -48,7 +48,7 @@ cv::Mat rgbToHSI(const cv::Mat & rgb_image)
       g = ((float)rgb_image.at<cv::Vec3b>(i,j)[1]) / 255;
       r = ((float)rgb_image.at<cv::Vec3b>(i,j)[2]) / 255;
 
-      H = std::acos((((r-g)+(r-b))/2) / std::sqrt((r-g)*(r-g) + (r-g)*(g-b)));
+      H = std::acos((((r-g)+(r-b))/2) / std::sqrt((r-g)*(r-g) + (r-b)*(g-b)));
       S = 1 - (3*(std::min(r, std::min(b,g))))/(r+g+b);
       I = (r+g+b) / 3;
 
@@ -228,7 +228,8 @@ const
 
     for (int i = 0; i < in_image_rgb.rows; i++) {
       for (int j = 0; j < in_image_rgb.cols; j++) {
-        if ((i == center.x || i == center.x + 1)) {
+        if (i > center.x - cv::getTrackbarPos("Filter Value [0-100]", "window_name")
+            && i < center.x + cv::getTrackbarPos("Filter Value [0-100]", "window_name") ) {
           tmp.at<float>(i, j) = (float)1;
         } else {
           tmp.at<float>(i, j) = (float)0;
@@ -252,7 +253,7 @@ const
   }
   case 5:
   {
-cv::Mat BW_opencv;
+    cv::Mat BW_opencv;
     cv::cvtColor(out_image_rgb, BW_opencv, cv::COLOR_RGB2GRAY);
     // Compute the Discrete fourier transform
     cv::Mat complexImg = computeDFT(BW_opencv);
@@ -265,7 +266,8 @@ cv::Mat BW_opencv;
 
     for (int i = 0; i < in_image_rgb.rows; i++) {
       for (int j = 0; j < in_image_rgb.cols; j++) {
-        if ((i == center.x || i == center.x + 1)) {
+        if (i > center.x - cv::getTrackbarPos("Filter Value [0-100]", "window_name")
+            && i < center.x + cv::getTrackbarPos("Filter Value [0-100]", "window_name") ) {
           tmp.at<float>(i, j) = (float)0;
         } else {
           tmp.at<float>(i, j) = (float)1;

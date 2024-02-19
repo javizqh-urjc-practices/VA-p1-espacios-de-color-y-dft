@@ -77,41 +77,6 @@ inline float rgb2hue(const float r, const float g, const float b){
 
 }
 
-namespace CVFunctions {
-
-cv::Mat BGR2HSI(const cv::Mat & image){
-
-  cv::Mat hsi_mat = cv::Mat::zeros(image.size(), image.type());
-  float r, g, b, h, s, i;
-
-  for (int u = 0; u < image.rows; u++) {
-    for (int v = 0; v < image.cols; v++) {
-
-      b = ((float)image.at<cv::Vec3b>(u,v)[0]) / 255;
-      g = ((float)image.at<cv::Vec3b>(u,v)[1]) / 255;
-      r = ((float)image.at<cv::Vec3b>(u,v)[2]) / 255;
-
-      h = rgb2hue(r,g,b);
-      s = 1 - 3 * std::min({r, g, b}) / (r + g + b);
-      i = (r+g+b)/3;
-
-
-      if (b > g) {
-        h = 360 - h;
-      }
-
-      hsi_mat.at<cv::Vec3b>(u,v)[0] = h*255/360;
-      hsi_mat.at<cv::Vec3b>(u,v)[1] = s*255;
-      hsi_mat.at<cv::Vec3b>(u,v)[2] = i*255;
-    }
-  }
-
-  return hsi_mat;
-
-}
-
-}
-
 // Calculate dft spectrum
 cv::Mat spectrum(const cv::Mat & complexI)
 {
@@ -137,6 +102,65 @@ cv::Mat spectrum(const cv::Mat & complexI)
   return spectrum;
 }
 
+namespace CVFunctions {
+
+cv::Mat BGR2HSI(const cv::Mat & image){
+
+  cv::Mat hsi_mat = cv::Mat::zeros(image.size(), image.type());
+  float r, g, b, h, s, i;
+
+  for (int u = 0; u < image.rows; u++) {
+    for (int v = 0; v < image.cols; v++) {
+
+      b = ((float)image.at<cv::Vec3b>(u,v)[0]) / 255;
+      g = ((float)image.at<cv::Vec3b>(u,v)[1]) / 255;
+      r = ((float)image.at<cv::Vec3b>(u,v)[2]) / 255;
+
+      h = rgb2hue(r,g,b);
+
+      // Rad -> Degree
+      h = h*180/3.1415;
+      s = 1 - 3 * std::min({r, g, b}) / (r + g + b);
+      i = (r+g+b)/3;
+
+
+      if (b > g) {
+        h = 360 - h;
+      }
+
+      hsi_mat.at<cv::Vec3b>(u,v)[0] = h*255/360;
+      hsi_mat.at<cv::Vec3b>(u,v)[1] = s*255;
+      hsi_mat.at<cv::Vec3b>(u,v)[2] = i*255;
+    }
+  }
+
+  return hsi_mat;
+
+}
+
+cv::Mat substract_channels(const cv::Mat & mat1, const cv::Mat & mat2) {
+
+  std::vector<cv::Mat> channels1;
+  std::vector<cv::Mat> channels2;
+  std::vector<cv::Mat> splitted_result;
+
+  cv::split(mat1, channels1);
+  cv::split(mat2, channels2);
+
+  for (int i = 0; i < (int)channels1.size(); i++) {
+    splitted_result.push_back(channels1[i] - channels2[i]);
+  }
+
+  cv::Mat result;
+  cv::merge(splitted_result,result);
+
+  return result;
+
+}
+
+}
+
+
 namespace CVParams {
 
   inline bool running = false;
@@ -157,7 +181,7 @@ CVGroup CVSubscriber::processing(
 const
 {
   // Create output images
-  cv::Mat out_image_rgb, out_image_depth, preprocessed_image, hsv_mat;
+  cv::Mat out_image_rgb, out_image_depth, preprocessed_image, hsv, hsi;
   // Create output pointcloud
   pcl::PointCloud<pcl::PointXYZRGB> out_pointcloud;
 
@@ -172,7 +196,6 @@ const
     CVParams::running = true;
 
     cv::namedWindow(CVParams::WINDOW_NAME);
-
     // create Trackbar and add to a window
     cv::createTrackbar("mode", CVParams::WINDOW_NAME, nullptr, 7, 0);
   }
@@ -183,10 +206,14 @@ const
   case 1:
     preprocessed_image = CVFunctions::BGR2HSI(in_image_rgb);
     break;
+
   case 2:
-    cv::cvtColor(out_image_rgb, hsv_mat, cv::COLOR_BGR2HSV);
-    preprocessed_image = hsv_mat - CVFunctions::BGR2HSI(in_image_rgb);
+    cv::cvtColor(in_image_rgb, hsv, cv::COLOR_BGR2HSV);
+    hsi = CVFunctions::BGR2HSI(in_image_rgb);
+    preprocessed_image = CVFunctions::substract_channels(hsv, hsi);
     break;
+
+  case 3:
 
   default:
     preprocessed_image = out_image_rgb;

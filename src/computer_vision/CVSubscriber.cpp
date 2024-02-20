@@ -19,9 +19,11 @@
 #include "opencv2/imgproc.hpp"
 #include "opencv2/imgcodecs.hpp"
 #include "opencv2/highgui.hpp"
+#include "rclcpp/rclcpp.hpp"
+
 
 // Compute the Discrete fourier transform
-cv::Mat computeDFT(const cv::Mat & image)
+cv::Mat computeDFT(const cv::Mat &image)
 {
   // Expand the image to an optimal size.
   cv::Mat padded;
@@ -104,6 +106,36 @@ cv::Mat spectrum(const cv::Mat & complexI)
 
 namespace CVFunctions {
 
+std::vector<cv::Mat> multichannelDFT(const cv::Mat &image_rgb){
+
+  // Declarations
+  std::vector<cv::Mat> input_channels;
+  std::vector<cv::Mat> output_channels;
+
+  // Computing DFT for each
+  cv::split(image_rgb, input_channels);
+  for (int i = 0; i < (int)input_channels.size(); i++){
+    output_channels.push_back(computeDFT(input_channels[i]));
+  }
+
+  return output_channels;
+}
+
+
+
+cv::Mat complex_channels2RGBspectrum(const std::vector<cv::Mat>& complex_channels)
+{
+    cv::Mat result;
+    std::vector<cv::Mat> spectrums;
+
+    for (int i = 0; i < (int)complex_channels.size(); ++i) {
+        spectrums.push_back(spectrum(complex_channels[i]));
+    }
+
+    cv::merge(spectrums, result);
+    return result;
+}
+
 cv::Mat BGR2HSI(const cv::Mat & image){
 
   cv::Mat hsi_mat = cv::Mat::zeros(image.size(), image.type());
@@ -117,12 +149,12 @@ cv::Mat BGR2HSI(const cv::Mat & image){
       r = ((float)image.at<cv::Vec3b>(u,v)[2]) / 255;
 
       h = rgb2hue(r,g,b);
-
-      // Rad -> Degree
-      h = h*180/3.1415;
-      s = 1 - 3 * std::min({r, g, b}) / (r + g + b);
+      if (r + g + b != 0) {
+        s = 1 - 3 * std::min({r, g, b}) / (r + g + b);
+      }else{
+        s = 0;
+      }
       i = (r+g+b)/3;
-
 
       if (b > g) {
         h = 360 - h;
@@ -158,8 +190,36 @@ cv::Mat substract_channels(const cv::Mat & mat1, const cv::Mat & mat2) {
 
 }
 
+cv::Mat get_horizontal_filtered(const cv::Mat &image, float strength, bool filter_inside) {
+    // Asumes complex images as input
+
+    strength = std::max(0.0f, std::min(1.0f, strength));
+
+    int insideMultiplier = filter_inside ? 1 : 0;
+    int outsideMultiplier = 1 - insideMultiplier;
+
+    int deleted_rows = static_cast<int>(strength * (image.rows / 2.0));
+
+    cv::Mat result = cv::Mat::zeros(image.size(), image.type());
+
+    int start = std::max(image.rows / 2 - deleted_rows, 0);
+    int end = std::min(image.rows / 2 + deleted_rows, image.rows);
+
+    for (int i = 0; i < result.rows; i++) {
+        for (int j = 0; j < result.cols; j++) {
+            if (i >= start && i < end) {
+                result.at<cv::Vec2f>(i, j) = image.at<cv::Vec2f>(i, j) * insideMultiplier;
+            } else {
+                result.at<cv::Vec2f>(i, j) = image.at<cv::Vec2f>(i, j) * outsideMultiplier;
+            }
+        }
+    }
+
+    return result;
 }
 
+
+}
 
 namespace CVParams {
 
@@ -181,7 +241,11 @@ CVGroup CVSubscriber::processing(
 const
 {
   // Create output images
-  cv::Mat out_image_rgb, out_image_depth, preprocessed_image, hsv, hsi;
+  cv::Mat out_image_rgb, out_image_depth, preprocessed_image, hsv, hsi, complex_image, filtered_image;
+  std::vector<cv::Mat> dft_channels;
+  int strength;
+  bool reverse;
+
   // Create output pointcloud
   pcl::PointCloud<pcl::PointXYZRGB> out_pointcloud;
 
@@ -198,9 +262,9 @@ const
     cv::namedWindow(CVParams::WINDOW_NAME);
     // create Trackbar and add to a window
     cv::createTrackbar("mode", CVParams::WINDOW_NAME, nullptr, 7, 0);
+    cv::createTrackbar("filter_value", CVParams::WINDOW_NAME, nullptr, 100, 0);
   }
     
-
   switch (cv::getTrackbarPos("mode", CVParams::WINDOW_NAME))
   {
   case 1:
@@ -208,17 +272,49 @@ const
     break;
 
   case 2:
+
     cv::cvtColor(in_image_rgb, hsv, cv::COLOR_BGR2HSV);
     hsi = CVFunctions::BGR2HSI(in_image_rgb);
     preprocessed_image = CVFunctions::substract_channels(hsv, hsi);
     break;
 
   case 3:
+//    RGB Spectrum
+//    dft_channels = CVFunctions::multichannelDFT(in_image_rgb);
+//    preprocessed_image = CVFunctions::complex_channels2spectrum(dft_channels);
+
+    cv::cvtColor(in_image_rgb, preprocessed_image, cv::COLOR_RGB2GRAY);
+    complex_image = computeDFT(preprocessed_image);
+    preprocessed_image = spectrum(complex_image);
+    break;
+
+  case 4:
+  case 5:
+
+    // Obtaining Parameter
+    strength = cv::getTrackbarPos("filter_value", CVParams::WINDOW_NAME);
+    reverse = (cv::getTrackbarPos("mode", CVParams::WINDOW_NAME) == 5);
+
+    // Changing to GrayScale
+    cv::cvtColor(in_image_rgb, preprocessed_image, cv::COLOR_RGB2GRAY);
+
+    // Preprocessing
+    complex_image = fftShift(computeDFT(preprocessed_image));
+    filtered_image = CVFunctions::get_horizontal_filtered(complex_image, (float)strength/100.0, reverse);
+    complex_image = fftShift(filtered_image);
+    cv::idft(complex_image, preprocessed_image, cv::DFT_INVERSE | cv::DFT_REAL_OUTPUT);
+
+    // Normalizing
+    cv::normalize(preprocessed_image, preprocessed_image, 0, 1, cv::NORM_MINMAX);
+
+    break;
+
 
   default:
     preprocessed_image = out_image_rgb;
     break;
   }
+
 
   cv::imshow(CVParams::WINDOW_NAME, preprocessed_image);
   cv::waitKey(1);

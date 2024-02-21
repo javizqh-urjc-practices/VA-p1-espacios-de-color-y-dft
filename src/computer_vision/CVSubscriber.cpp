@@ -108,6 +108,10 @@ namespace CVParams {
 
   inline bool running = false;
   inline std::string WINDOW_NAME = "Practica_5";
+
+  int MAX_STRENGH = 100;
+  float UMBRAL_CASE_4 = 0.6;
+  float UMBRAL_CASE_5 = 0.4;
   
   enum FILTER_PARAMS {
     VERTICAL,
@@ -210,7 +214,7 @@ cv::Mat filter(const cv::Mat &image, float strength, CVParams::FILTER_PARAMS dir
     cv::Mat result = cv::Mat::zeros(image.size(), image.type());
 
     strength = std::max(0.0f, std::min(1.0f, strength));
-    
+
     int insideMultiplier = mode == CVParams::INSIDE ? 1 : 0;
     int outsideMultiplier = 1 - insideMultiplier;
     int target = direction == CVParams::VERTICAL ? image.cols : image.rows;
@@ -235,6 +239,20 @@ cv::Mat filter(const cv::Mat &image, float strength, CVParams::FILTER_PARAMS dir
     return result;
 }
 
+cv::Mat umbral(const cv::Mat& input, float ratio) {
+  // Warning: Assumes 1 Channel input image
+
+  cv::Mat result = cv::Mat::zeros(input.size(), input.type());
+  int bound = static_cast<int>(ratio*255);
+
+  for (int i = 0; i < result.rows; i++) {
+      for (int j = 0; j < result.cols; j++) {
+          result.at<float>(i, j) = input.at<float>(i,j) > bound ? 255 : 0;
+      }
+  }
+
+  return result;
+}
 
 }
 
@@ -253,6 +271,7 @@ const
 {
   // Create output images
   cv::Mat out_image_rgb, out_image_depth, preprocessed_image, hsv, hsi, complex_image, filtered_image;
+  cv::Mat image_a, image_b, image_ab;
   std::vector<cv::Mat> dft_channels;
   int strength;
   CVParams::FILTER_PARAMS mode, direction;
@@ -272,8 +291,8 @@ const
 
     cv::namedWindow(CVParams::WINDOW_NAME);
     // create Trackbar and add to a window
-    cv::createTrackbar("mode", CVParams::WINDOW_NAME, nullptr, 7, 0);
-    cv::createTrackbar("filter_value", CVParams::WINDOW_NAME, nullptr, 100, 0);
+    cv::createTrackbar("mode", CVParams::WINDOW_NAME, nullptr, 6, 0);
+    cv::createTrackbar("filter_value", CVParams::WINDOW_NAME, nullptr, CVParams::MAX_STRENGH, 0);
   }
     
   switch (cv::getTrackbarPos("mode", CVParams::WINDOW_NAME))
@@ -324,7 +343,7 @@ const
 
     // Preprocessing
     complex_image = fftShift(computeDFT(preprocessed_image));
-    filtered_image = CVFunctions::filter(complex_image, (float)strength/100.0, direction, mode);
+    filtered_image = CVFunctions::filter(complex_image, (float)strength/CVParams::MAX_STRENGH, direction, mode);
     complex_image = fftShift(filtered_image);
     cv::idft(complex_image, preprocessed_image, cv::DFT_INVERSE | cv::DFT_REAL_OUTPUT);
 
@@ -333,9 +352,37 @@ const
 
     break;
 
+  case 6:
+
+    // Obtaining Parameter
+    strength = cv::getTrackbarPos("filter_value", CVParams::WINDOW_NAME);
+
+    // Changing to GrayScale
+    cv::cvtColor(in_image_rgb, preprocessed_image, cv::COLOR_RGB2GRAY);
+
+    // Preprocessing image case 4 -> image_a
+    complex_image = fftShift(computeDFT(preprocessed_image));
+    filtered_image = CVFunctions::filter(complex_image, (float)strength/CVParams::MAX_STRENGH, CVParams::VERTICAL, CVParams::OUTSIDE);
+    complex_image = fftShift(filtered_image);
+    cv::idft(complex_image, image_a, cv::DFT_INVERSE | cv::DFT_REAL_OUTPUT);
+
+    // Preprocessing image case 5 -> image_b
+    complex_image = fftShift(computeDFT(preprocessed_image));
+    filtered_image = CVFunctions::filter(complex_image, (float)strength/CVParams::MAX_STRENGH, CVParams::HORIZONTAL, CVParams::OUTSIDE);
+    complex_image = fftShift(filtered_image);
+    cv::idft(complex_image, image_b, cv::DFT_INVERSE | cv::DFT_REAL_OUTPUT);
+
+    // Umbralizing
+    image_a = CVFunctions::umbral(image_a,CVParams::UMBRAL_CASE_4);
+    image_b = CVFunctions::umbral(image_b,CVParams::UMBRAL_CASE_5);
+
+    // OR
+    cv::multiply(image_a, image_b, image_ab);
+    preprocessed_image = cv::Scalar::all(255) - image_ab;
+    break;
 
   default:
-    preprocessed_image = out_image_rgb;
+    preprocessed_image = in_image_rgb;
     break;
   }
 

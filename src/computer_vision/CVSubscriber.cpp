@@ -20,7 +20,14 @@
 #include "opencv2/imgcodecs.hpp"
 #include "opencv2/highgui.hpp"
 
+#define PI 3.14159265
+
 bool has_window = false;
+
+typedef enum _filterMode {
+  LOW_PASS_FILTER = 0,
+  HIGH_PASS_FILTER
+} filterMode;
 
 // Create window at the beggining
 void initWindow()
@@ -48,8 +55,8 @@ cv::Mat rgbToHSI(const cv::Mat & rgb_image)
       g = ((float)rgb_image.at<cv::Vec3b>(i,j)[1]) / 255;
       r = ((float)rgb_image.at<cv::Vec3b>(i,j)[2]) / 255;
 
-      H = std::acos((((r-g)+(r-b))/2) / std::sqrt((r-g)*(r-g) + (r-b)*(g-b)));
-      S = 1 - (3*(std::min(r, std::min(b,g))))/(r+g+b);
+      H = (std::acos((((r-g)+(r-b))/2) / (std::sqrt((r-g)*(r-g) + (r-b)*(g-b)))) * 180)/ PI;
+      S = 1 - 3* ((std::min(r, std::min(b,g)) / (r+g+b)));
       I = (r+g+b) / 3;
 
       if (b > g) H = 360 - H;
@@ -61,6 +68,35 @@ cv::Mat rgbToHSI(const cv::Mat & rgb_image)
   }
 
   return hsi;
+}
+
+cv::Mat createHorizFilter(const cv::Mat &image, const filterMode mode,
+                          const int slider_val)
+{
+  float inside = (float) 0;  // Values inside the box
+  float outside = (float) 0; // Values outside the box
+
+  if (mode == LOW_PASS_FILTER) inside = 1;
+  else if (mode == HIGH_PASS_FILTER) outside = 1;
+
+  cv::Mat tmp(image.rows, image.cols, CV_32F);
+  cv::Point center(image.rows / 2, image.cols / 2); // Is always even
+
+  for (int i = 0; i < image.rows; i++) {
+    for (int j = 0; j < image.cols; j++) {
+      if (i > center.x - slider_val && i < center.x + slider_val ) {
+        tmp.at<float>(i, j) = inside;
+      } else {
+        tmp.at<float>(i, j) = outside;
+      }
+    }
+  }
+
+  cv::Mat toMerge[] = {tmp, tmp};
+  cv::Mat horiz_Filter;
+  cv::merge(toMerge, 2, horiz_Filter);
+
+  return horiz_Filter;
 }
 
 // Compute the Discrete fourier transform
@@ -176,7 +212,7 @@ const
   {
     cv::Mat HSV_image;
     cv::Mat HSI_image = rgbToHSI(in_image_rgb);
-    cv::cvtColor(out_image_rgb, HSV_image, cv::COLOR_RGB2HSV);
+    cv::cvtColor(out_image_rgb, HSV_image, cv::COLOR_BGR2HSV);
 
     std::vector<cv::Mat> three_channels_hsv;
     cv::split(HSV_image, three_channels_hsv );
@@ -197,7 +233,7 @@ const
     cv::Mat new_image;
     cv::merge(final_channels, new_image);
 
-    cv::imshow("window_name", new_image);;
+    cv::imshow("window_name", result_s);;
     break;
   }
   case 3:
@@ -223,25 +259,10 @@ const
     // Crop and rearrange
     cv::Mat shift_complex = fftShift(complexImg); // Rearrange quadrants - Spectrum with low
 
-    cv::Mat tmp(in_image_rgb.rows, in_image_rgb.cols, CV_32F);
-    cv::Point center(in_image_rgb.rows / 2, in_image_rgb.cols / 2); // Is always even
+    cv::Mat filter = createHorizFilter(in_image_rgb, LOW_PASS_FILTER,
+                     cv::getTrackbarPos("Filter Value [0-100]", "window_name"));
 
-    for (int i = 0; i < in_image_rgb.rows; i++) {
-      for (int j = 0; j < in_image_rgb.cols; j++) {
-        if (i > center.x - cv::getTrackbarPos("Filter Value [0-100]", "window_name")
-            && i < center.x + cv::getTrackbarPos("Filter Value [0-100]", "window_name") ) {
-          tmp.at<float>(i, j) = (float)1;
-        } else {
-          tmp.at<float>(i, j) = (float)0;
-        }
-      }
-    }
-
-    cv::Mat toMerge[] = {tmp, tmp};
-    cv::Mat dft_Filter;
-    cv::merge(toMerge, 2, dft_Filter);
-
-    cv::mulSpectrums(shift_complex,dft_Filter,shift_complex,0);
+    cv::mulSpectrums(shift_complex,filter,shift_complex,0);
     cv::Mat rearrange = fftShift(shift_complex);
 
     // Get the spectrum
@@ -261,29 +282,15 @@ const
     // Crop and rearrange
     cv::Mat shift_complex = fftShift(complexImg); // Rearrange quadrants - Spectrum with low
 
-    cv::Mat tmp(in_image_rgb.rows, in_image_rgb.cols, CV_32F);
-    cv::Point center(in_image_rgb.rows / 2, in_image_rgb.cols / 2); // Is always even
+    cv::Mat filter = createHorizFilter(in_image_rgb, HIGH_PASS_FILTER,
+                     cv::getTrackbarPos("Filter Value [0-100]", "window_name"));
 
-    for (int i = 0; i < in_image_rgb.rows; i++) {
-      for (int j = 0; j < in_image_rgb.cols; j++) {
-        if (i > center.x - cv::getTrackbarPos("Filter Value [0-100]", "window_name")
-            && i < center.x + cv::getTrackbarPos("Filter Value [0-100]", "window_name") ) {
-          tmp.at<float>(i, j) = (float)0;
-        } else {
-          tmp.at<float>(i, j) = (float)1;
-        }
-      }
-    }
-
-    cv::Mat toMerge[] = {tmp, tmp};
-    cv::Mat dft_Filter;
-    cv::merge(toMerge, 2, dft_Filter);
-
-    cv::mulSpectrums(shift_complex,dft_Filter,shift_complex,0);
+    cv::mulSpectrums(shift_complex, filter, shift_complex,0);
     cv::Mat rearrange = fftShift(shift_complex);
 
     // Get the spectrum
     cv::Mat inverseTransform;
+    //TODO: Esto en el ejercicio 6 cv::imshow("window_name", spectrum(rearrange));
     cv::idft(rearrange, inverseTransform, cv::DFT_INVERSE | cv::DFT_REAL_OUTPUT);
     cv::normalize(inverseTransform, inverseTransform, 0, 1, cv::NORM_MINMAX);
     cv::imshow("window_name", inverseTransform);

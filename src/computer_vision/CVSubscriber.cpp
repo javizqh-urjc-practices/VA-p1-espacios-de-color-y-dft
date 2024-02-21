@@ -233,7 +233,7 @@ const
     cv::Mat new_image;
     cv::merge(final_channels, new_image);
 
-    cv::imshow("window_name", result_s);;
+    cv::imshow("window_name", new_image);;
     break;
   }
   case 3:

@@ -104,6 +104,19 @@ cv::Mat spectrum(const cv::Mat & complexI)
   return spectrum;
 }
 
+namespace CVParams {
+
+  inline bool running = false;
+  inline std::string WINDOW_NAME = "Practica_5";
+  
+  enum FILTER_PARAMS {
+    VERTICAL,
+    HORIZONTAL,
+    INSIDE,
+    OUTSIDE
+  };
+
+}
 namespace CVFunctions {
 
 std::vector<cv::Mat> multichannelDFT(const cv::Mat &image_rgb){
@@ -190,24 +203,28 @@ cv::Mat substract_channels(const cv::Mat & mat1, const cv::Mat & mat2) {
 
 }
 
-cv::Mat get_horizontal_filtered(const cv::Mat &image, float strength, bool filter_inside) {
-    // Asumes complex images as input
+cv::Mat filter(const cv::Mat &image, float strength, CVParams::FILTER_PARAMS direction, CVParams::FILTER_PARAMS mode) {
+    // Warning: Asumes complex images as input
 
-    strength = std::max(0.0f, std::min(1.0f, strength));
-
-    int insideMultiplier = filter_inside ? 1 : 0;
-    int outsideMultiplier = 1 - insideMultiplier;
-
-    int deleted_rows = static_cast<int>(strength * (image.rows / 2.0));
-
+    int start, end;
     cv::Mat result = cv::Mat::zeros(image.size(), image.type());
 
-    int start = std::max(image.rows / 2 - deleted_rows, 0);
-    int end = std::min(image.rows / 2 + deleted_rows, image.rows);
+    strength = std::max(0.0f, std::min(1.0f, strength));
+    
+    int insideMultiplier = mode == CVParams::INSIDE ? 1 : 0;
+    int outsideMultiplier = 1 - insideMultiplier;
+    int target = direction == CVParams::VERTICAL ? image.cols : image.rows;
 
-    for (int i = 0; i < result.rows; i++) {
-        for (int j = 0; j < result.cols; j++) {
-            if (i >= start && i < end) {
+    int deleted = static_cast<int>(strength * (target / 2.0));
+    start = std::max(target / 2 - deleted, 0);
+    end = std::min(target / 2 + deleted, image.cols);
+
+    int i, j = 0;
+    int& line = direction == CVParams::VERTICAL ? j : i;
+
+    for (i = 0; i < result.rows; i++) {
+        for (j = 0; j < result.cols; j++) {
+            if (line >= start && line < end) {
                 result.at<cv::Vec2f>(i, j) = image.at<cv::Vec2f>(i, j) * insideMultiplier;
             } else {
                 result.at<cv::Vec2f>(i, j) = image.at<cv::Vec2f>(i, j) * outsideMultiplier;
@@ -221,12 +238,6 @@ cv::Mat get_horizontal_filtered(const cv::Mat &image, float strength, bool filte
 
 }
 
-namespace CVParams {
-
-  inline bool running = false;
-  inline std::string WINDOW_NAME = "Practica_5";
-
-}
 
 namespace computer_vision
 {
@@ -244,7 +255,7 @@ const
   cv::Mat out_image_rgb, out_image_depth, preprocessed_image, hsv, hsi, complex_image, filtered_image;
   std::vector<cv::Mat> dft_channels;
   int strength;
-  bool reverse;
+  CVParams::FILTER_PARAMS mode, direction;
 
   // Create output pointcloud
   pcl::PointCloud<pcl::PointXYZRGB> out_pointcloud;
@@ -293,14 +304,27 @@ const
 
     // Obtaining Parameter
     strength = cv::getTrackbarPos("filter_value", CVParams::WINDOW_NAME);
-    reverse = (cv::getTrackbarPos("mode", CVParams::WINDOW_NAME) == 5);
+
+    if (cv::getTrackbarPos("mode", CVParams::WINDOW_NAME) == 4) {
+
+      // Maintain only main horizontal 
+      direction = CVParams::VERTICAL;
+      mode = CVParams::OUTSIDE;
+
+    } else {
+
+      // Remove only main horizontal 
+      direction = CVParams::HORIZONTAL;
+      mode = CVParams::OUTSIDE;
+
+    }
 
     // Changing to GrayScale
     cv::cvtColor(in_image_rgb, preprocessed_image, cv::COLOR_RGB2GRAY);
 
     // Preprocessing
     complex_image = fftShift(computeDFT(preprocessed_image));
-    filtered_image = CVFunctions::get_horizontal_filtered(complex_image, (float)strength/100.0, reverse);
+    filtered_image = CVFunctions::filter(complex_image, (float)strength/100.0, direction, mode);
     complex_image = fftShift(filtered_image);
     cv::idft(complex_image, preprocessed_image, cv::DFT_INVERSE | cv::DFT_REAL_OUTPUT);
 

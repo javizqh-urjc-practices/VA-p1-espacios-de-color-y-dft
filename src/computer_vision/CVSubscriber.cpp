@@ -55,13 +55,13 @@ cv::Mat rgbToHSI(const cv::Mat & rgb_image)
       g = ((float)rgb_image.at<cv::Vec3b>(i,j)[1]) / 255;
       r = ((float)rgb_image.at<cv::Vec3b>(i,j)[2]) / 255;
 
-      H = (std::acos((((r-g)+(r-b))/2) / (std::sqrt((r-g)*(r-g) + (r-b)*(g-b)))) * 180)/ PI;
+      H = std::acos((((r-g)+(r-b))/2) / (std::sqrt((r-g)*(r-g) + (r-b)*(g-b))));
       S = 1 - 3* ((std::min(r, std::min(b,g)) / (r+g+b)));
       I = (r+g+b) / 3;
 
-      if (b > g) H = 360 - H;
+      if (b > g) H = 2*PI - H;
 
-      hsi.at<cv::Vec3b>(i, j)[0] = (H / 360) *255 ;
+      hsi.at<cv::Vec3b>(i, j)[0] = (H * 180)/ PI ;
       hsi.at<cv::Vec3b>(i, j)[1] = S*255;
       hsi.at<cv::Vec3b>(i, j)[2] = I*255;
     }
@@ -233,7 +233,7 @@ const
     cv::Mat new_image;
     cv::merge(final_channels, new_image);
 
-    cv::imshow("window_name", new_image);;
+    cv::imshow("window_name", result_h);;
     break;
   }
   case 3:

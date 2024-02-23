@@ -23,6 +23,7 @@
 #define PI 3.14159265
 
 bool has_window = false;
+bool show_debug = false;
 
 typedef enum _filterMode {
   LOW_PASS_FILTER = 0,
@@ -40,6 +41,16 @@ void initWindow()
   // create Trackbar and add to a window
   cv::createTrackbar("Option [0-6]", "window_name", nullptr, 6, 0); 
   cv::createTrackbar("Filter Value [0-100]", "window_name", nullptr, 100, 0); 
+}
+
+void hideDebug() {
+  if (show_debug) {
+    cv::destroyWindow("remove_filter");
+    cv::destroyWindow("keep_filter");
+    cv::destroyWindow("remove_filter_bw");
+    cv::destroyWindow("keep_filter_bw");
+  }
+  show_debug = false;
 }
 
 // Convert from RGB to HSI
@@ -199,17 +210,20 @@ const
   {
   case 0:
   {
+    hideDebug();
     cv::imshow("window_name", out_image_rgb);
     break;
   }
   case 1:
   {
+    hideDebug();
     cv::Mat HSI_image = rgbToHSI(in_image_rgb);
     cv::imshow("window_name", HSI_image);
     break;
   }
   case 2:
   {
+    hideDebug();
     cv::Mat HSV_image;
     cv::Mat HSI_image = rgbToHSI(in_image_rgb);
     cv::cvtColor(out_image_rgb, HSV_image, cv::COLOR_BGR2HSV);
@@ -238,6 +252,7 @@ const
   }
   case 3:
   {
+    hideDebug();
     cv::Mat BW_opencv;
     cv::cvtColor(out_image_rgb, BW_opencv, cv::COLOR_RGB2GRAY);
     // Compute the Discrete fourier transform
@@ -251,6 +266,7 @@ const
   }
   case 4:
   {
+    hideDebug();
     cv::Mat BW_opencv;
     cv::cvtColor(out_image_rgb, BW_opencv, cv::COLOR_RGB2GRAY);
     // Compute the Discrete fourier transform
@@ -274,6 +290,7 @@ const
   }
   case 5:
   {
+    hideDebug();
     cv::Mat BW_opencv;
     cv::cvtColor(out_image_rgb, BW_opencv, cv::COLOR_RGB2GRAY);
     // Compute the Discrete fourier transform
@@ -344,6 +361,21 @@ const
     cv::Mat Or_opencv;
     bitwise_or(inverseTransform_4, inverseTransform_5, Or_opencv);
     cv::imshow("window_name", Or_opencv);
+
+    if (cv::waitKey(1) == 'd') {
+      if (show_debug) {
+        hideDebug();
+      } else {
+        show_debug = true;
+      }
+    }
+
+    if (show_debug) {
+      cv::imshow("remove_filter", spectrum(rearrange_5));
+      cv::imshow("keep_filter", spectrum(rearrange_4));
+      cv::imshow("remove_filter_bw", inverseTransform_5);
+      cv::imshow("keep_filter_bw", inverseTransform_4);
+    }
     break;
   }
   default:

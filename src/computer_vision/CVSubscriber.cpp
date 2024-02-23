@@ -45,25 +45,25 @@ void initWindow()
 // Convert from RGB to HSI
 cv::Mat rgbToHSI(const cv::Mat & rgb_image)
 {
-  float r,g,b;
-  float H,S,I;
+  double r,g,b;
+  double H,S,I;
   cv::Mat hsi(rgb_image.rows, rgb_image.cols, rgb_image.type());
 
   for (int i = 0; i < rgb_image.rows; i++) {
     for (int j = 0; j < rgb_image.cols; j++) {
-      b = ((float)rgb_image.at<cv::Vec3b>(i,j)[0]) / 255;
-      g = ((float)rgb_image.at<cv::Vec3b>(i,j)[1]) / 255;
-      r = ((float)rgb_image.at<cv::Vec3b>(i,j)[2]) / 255;
+      b = (double) rgb_image.at<cv::Vec3b>(i,j)[0];
+      g = (double) rgb_image.at<cv::Vec3b>(i,j)[1];
+      r = (double) rgb_image.at<cv::Vec3b>(i,j)[2];
 
       H = std::acos((((r-g)+(r-b))/2) / (std::sqrt((r-g)*(r-g) + (r-b)*(g-b))));
-      S = 1 - 3* ((std::min(r, std::min(b,g)) / (r+g+b)));
-      I = (r+g+b) / 3;
+      S = 1 - ((3.0 * std::min(r, std::min(b,g)) / (r+g+b)));
+      I = (r+g+b) / 3.0;
 
       if (b > g) H = 2*PI - H;
 
       hsi.at<cv::Vec3b>(i, j)[0] = (H * 180)/ PI ;
       hsi.at<cv::Vec3b>(i, j)[1] = S*255;
-      hsi.at<cv::Vec3b>(i, j)[2] = I*255;
+      hsi.at<cv::Vec3b>(i, j)[2] = I;
     }
   }
 
@@ -233,7 +233,7 @@ const
     cv::Mat new_image;
     cv::merge(final_channels, new_image);
 
-    cv::imshow("window_name", result_h);;
+    cv::imshow("window_name", result_iv);;
     break;
   }
   case 3:

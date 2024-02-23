@@ -298,7 +298,52 @@ const
   }
   case 6:
   {
-    cv::imshow("window_name", out_image_rgb);
+    cv::Mat BW_opencv;
+    cv::cvtColor(out_image_rgb, BW_opencv, cv::COLOR_RGB2GRAY);
+    // Compute the Discrete fourier transform
+    cv::Mat complexImg = computeDFT(BW_opencv);
+    cv::Mat complexImg_5 = complexImg.clone();
+
+    // Crop and rearrange
+    cv::Mat shift_complex_4 = fftShift(complexImg); // Rearrange quadrants - Spectrum with low
+    cv::Mat shift_complex_5 = fftShift(complexImg_5); // Rearrange quadrants - Spectrum with low
+
+    cv::Mat filter_4 = createHorizFilter(in_image_rgb, LOW_PASS_FILTER,
+                     cv::getTrackbarPos("Filter Value [0-100]", "window_name"));
+
+    cv::Mat filter_5 = createHorizFilter(in_image_rgb, HIGH_PASS_FILTER,
+                     cv::getTrackbarPos("Filter Value [0-100]", "window_name"));
+
+    cv::mulSpectrums(shift_complex_4,filter_4,shift_complex_4,0);
+    cv::mulSpectrums(shift_complex_5,filter_5,shift_complex_5,0);
+    cv::Mat rearrange_4 = fftShift(shift_complex_4);
+    cv::Mat rearrange_5 = fftShift(shift_complex_5);
+
+    // Get the spectrum
+    cv::Mat inverseTransform_4;
+    cv::idft(rearrange_4, inverseTransform_4, cv::DFT_INVERSE | cv::DFT_REAL_OUTPUT);
+    cv::normalize(inverseTransform_4, inverseTransform_4, 0, 1, cv::NORM_MINMAX);
+
+    cv::Mat inverseTransform_5;
+    cv::idft(rearrange_5, inverseTransform_5, cv::DFT_INVERSE | cv::DFT_REAL_OUTPUT);
+    cv::normalize(inverseTransform_5, inverseTransform_5, 0, 1, cv::NORM_MINMAX);
+
+    for (int i = 0; i < inverseTransform_4.rows; i++) {
+      for (int j = 0; j < inverseTransform_4.cols; j++) {
+        inverseTransform_4.at<float>(i,j) = inverseTransform_4.at<float>(i,j) > 0.6 ? 255 : 0;
+      }
+    }
+
+    for (int i = 0; i < inverseTransform_5.rows; i++) {
+      for (int j = 0; j < inverseTransform_5.cols; j++) {
+        inverseTransform_5.at<float>(i,j) = inverseTransform_5.at<float>(i,j) > 0.4 ? 255 : 0;
+      }
+    }
+
+    // OR
+    cv::Mat Or_opencv;
+    bitwise_or(inverseTransform_4, inverseTransform_5, Or_opencv);
+    cv::imshow("window_name", Or_opencv);
     break;
   }
   default:

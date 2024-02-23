@@ -20,6 +20,85 @@
 #include "opencv2/imgcodecs.hpp"
 #include "opencv2/highgui.hpp"
 
+#define PI 3.14159265
+
+bool has_window = false;
+
+typedef enum _filterMode {
+  LOW_PASS_FILTER = 0,
+  HIGH_PASS_FILTER
+} filterMode;
+
+// Create window at the beggining
+void initWindow()
+{
+  if (has_window) return;
+  has_window = true;
+
+  // Show images in a different windows
+  cv::namedWindow("window_name");
+  // create Trackbar and add to a window
+  cv::createTrackbar("Option [0-6]", "window_name", nullptr, 6, 0); 
+  cv::createTrackbar("Filter Value [0-100]", "window_name", nullptr, 100, 0); 
+}
+
+// Convert from RGB to HSI
+cv::Mat rgbToHSI(const cv::Mat & rgb_image)
+{
+  float r,g,b;
+  float H,S,I;
+  cv::Mat hsi(rgb_image.rows, rgb_image.cols, rgb_image.type());
+
+  for (int i = 0; i < rgb_image.rows; i++) {
+    for (int j = 0; j < rgb_image.cols; j++) {
+      b = ((float)rgb_image.at<cv::Vec3b>(i,j)[0]) / 255;
+      g = ((float)rgb_image.at<cv::Vec3b>(i,j)[1]) / 255;
+      r = ((float)rgb_image.at<cv::Vec3b>(i,j)[2]) / 255;
+
+      H = std::acos((((r-g)+(r-b))/2) / (std::sqrt((r-g)*(r-g) + (r-b)*(g-b))));
+      S = 1 - 3* ((std::min(r, std::min(b,g)) / (r+g+b)));
+      I = (r+g+b) / 3;
+
+      if (b > g) H = 2*PI - H;
+
+      hsi.at<cv::Vec3b>(i, j)[0] = (H * 180)/ PI ;
+      hsi.at<cv::Vec3b>(i, j)[1] = S*255;
+      hsi.at<cv::Vec3b>(i, j)[2] = I*255;
+    }
+  }
+
+  return hsi;
+}
+
+cv::Mat createHorizFilter(const cv::Mat &image, const filterMode mode,
+                          const int slider_val)
+{
+  float inside = (float) 0;  // Values inside the box
+  float outside = (float) 0; // Values outside the box
+
+  if (mode == LOW_PASS_FILTER) inside = 1;
+  else if (mode == HIGH_PASS_FILTER) outside = 1;
+
+  cv::Mat tmp(image.rows, image.cols, CV_32F);
+  cv::Point center(image.rows / 2, image.cols / 2); // Is always even
+
+  for (int i = 0; i < image.rows; i++) {
+    for (int j = 0; j < image.cols; j++) {
+      if (i > center.x - slider_val && i < center.x + slider_val ) {
+        tmp.at<float>(i, j) = inside;
+      } else {
+        tmp.at<float>(i, j) = outside;
+      }
+    }
+  }
+
+  cv::Mat toMerge[] = {tmp, tmp};
+  cv::Mat horiz_Filter;
+  cv::merge(toMerge, 2, horiz_Filter);
+
+  return horiz_Filter;
+}
+
 // Compute the Discrete fourier transform
 cv::Mat computeDFT(const cv::Mat & image)
 {
@@ -69,7 +148,6 @@ cv::Mat fftShift(const cv::Mat & magI)
   return magI_copy;
 }
 
-
 // Calculate dft spectrum
 cv::Mat spectrum(const cv::Mat & complexI)
 {
@@ -116,9 +194,119 @@ const
   out_image_depth = in_image_depth;
   out_pointcloud = in_pointcloud;
 
-  // Show images in a different windows
-  cv::imshow("out_image_rgb", out_image_rgb);
-  cv::imshow("out_image_depth", out_image_depth);
+  initWindow();
+  switch (cv::getTrackbarPos("Option [0-6]", "window_name"))
+  {
+  case 0:
+  {
+    cv::imshow("window_name", out_image_rgb);
+    break;
+  }
+  case 1:
+  {
+    cv::Mat HSI_image = rgbToHSI(in_image_rgb);
+    cv::imshow("window_name", HSI_image);
+    break;
+  }
+  case 2:
+  {
+    cv::Mat HSV_image;
+    cv::Mat HSI_image = rgbToHSI(in_image_rgb);
+    cv::cvtColor(out_image_rgb, HSV_image, cv::COLOR_BGR2HSV);
+
+    std::vector<cv::Mat> three_channels_hsv;
+    cv::split(HSV_image, three_channels_hsv );
+
+    std::vector<cv::Mat> three_channels_hsi;
+    cv::split(HSI_image, three_channels_hsi );
+
+    cv::Mat result_h =  three_channels_hsv[0] - three_channels_hsi[0]; 
+    cv::Mat result_s =  three_channels_hsv[1] - three_channels_hsi[1]; 
+    cv::Mat result_iv = three_channels_hsv[2] - three_channels_hsi[2]; 
+
+    std::vector<cv::Mat> final_channels;
+
+    final_channels.push_back(result_h);
+    final_channels.push_back(result_s);
+    final_channels.push_back(result_iv);
+
+    cv::Mat new_image;
+    cv::merge(final_channels, new_image);
+
+    cv::imshow("window_name", result_h);;
+    break;
+  }
+  case 3:
+  {
+    cv::Mat BW_opencv;
+    cv::cvtColor(out_image_rgb, BW_opencv, cv::COLOR_RGB2GRAY);
+    // Compute the Discrete fourier transform
+    cv::Mat complexImg = computeDFT(BW_opencv);
+
+    // Get the spectrum
+    cv::Mat spectrum_original = spectrum(complexImg);
+
+    cv::imshow("window_name", spectrum_original);
+    break;
+  }
+  case 4:
+  {
+    cv::Mat BW_opencv;
+    cv::cvtColor(out_image_rgb, BW_opencv, cv::COLOR_RGB2GRAY);
+    // Compute the Discrete fourier transform
+    cv::Mat complexImg = computeDFT(BW_opencv);
+
+    // Crop and rearrange
+    cv::Mat shift_complex = fftShift(complexImg); // Rearrange quadrants - Spectrum with low
+
+    cv::Mat filter = createHorizFilter(in_image_rgb, LOW_PASS_FILTER,
+                     cv::getTrackbarPos("Filter Value [0-100]", "window_name"));
+
+    cv::mulSpectrums(shift_complex,filter,shift_complex,0);
+    cv::Mat rearrange = fftShift(shift_complex);
+
+    // Get the spectrum
+    cv::Mat inverseTransform;
+    cv::idft(rearrange, inverseTransform, cv::DFT_INVERSE | cv::DFT_REAL_OUTPUT);
+    cv::normalize(inverseTransform, inverseTransform, 0, 1, cv::NORM_MINMAX);
+    cv::imshow("window_name", inverseTransform);
+    break;
+  }
+  case 5:
+  {
+    cv::Mat BW_opencv;
+    cv::cvtColor(out_image_rgb, BW_opencv, cv::COLOR_RGB2GRAY);
+    // Compute the Discrete fourier transform
+    cv::Mat complexImg = computeDFT(BW_opencv);
+
+    // Crop and rearrange
+    cv::Mat shift_complex = fftShift(complexImg); // Rearrange quadrants - Spectrum with low
+
+    cv::Mat filter = createHorizFilter(in_image_rgb, HIGH_PASS_FILTER,
+                     cv::getTrackbarPos("Filter Value [0-100]", "window_name"));
+
+    cv::mulSpectrums(shift_complex, filter, shift_complex,0);
+    cv::Mat rearrange = fftShift(shift_complex);
+
+    // Get the spectrum
+    cv::Mat inverseTransform;
+    //TODO: Esto en el ejercicio 6 cv::imshow("window_name", spectrum(rearrange));
+    cv::idft(rearrange, inverseTransform, cv::DFT_INVERSE | cv::DFT_REAL_OUTPUT);
+    cv::normalize(inverseTransform, inverseTransform, 0, 1, cv::NORM_MINMAX);
+    cv::imshow("window_name", inverseTransform);
+    break;
+  }
+  case 6:
+  {
+    cv::imshow("window_name", out_image_rgb);
+    break;
+  }
+  default:
+  {
+    cv::imshow("window_name", out_image_rgb);
+    break;
+  }
+  }
   cv::waitKey(3);
 
   return CVGroup(out_image_rgb, out_image_depth, out_pointcloud);

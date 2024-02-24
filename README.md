@@ -18,28 +18,34 @@ If you want to use your own robot, in the launcher, change the topic names to ma
 
 # Questions
 
-- Adjunta una captura de la opción 3, e indica el por qué se ven esos colores en la
+- Adjunta una captura de la opción 2, e indica el por qué se ven esos colores en la
 imagen resultado de la resta entre HSV y HSI.
+![Imagen opción 2](img/im2.png)
 
-Hay que resumir esto
+Para poder saber el porque de los colores resultantes es necesario conocer las diferencias entre HSV y HSI, para ello vamos a ver las diferencias entre los canales.
 
-HSI, HSV, and HSL are all different color spaces. Hue computation is (as far as I can find) identical between the three models, and uses a 6-piece piece-wise function to determine it, or for a simpler model that is accurate to within 1.2 degrees, atan((sqrt(3)⋅(G-B))/2(R-G-B)) can be used. For the most part, these two are interchangeable, but generally HSV and HSL use the piece-wise model, where HSI usually uses the arctan model. Different equations may be used, but these usually sacrifice precision for either simplicity or faster computation.
+- El canal H o el tono se calcula de una manera más o menos similar entre los 2, por lo tanto las únicas diferencias que existan serán por la precisión de los calculos.
+- El canal S o la saturación es donde empiezan a haber diferencias entre los 2 métodos. En el HSV este valor viene definido por la siguiente fórmula: (max(R,G,B) - min(R,G,B))/max(R,G,B), mientras que para HSI el valor de S viene definido por 1 - min(R,G,B)/((1/3)⋅(R+G+B)). Esta diferencia en el cálculo causa que la imágen resultante tenga partes de color verdoso.
+- El canal I o V, o intensidad o valor también tienen diferencias tanto en su cálculo como en su nombre. Para HSV el valor es el máximo de los 3 canales, mientras que para el HSI la intensidad es la media de los mismos. Por esto la imágen tendrá un tono rojizo, ya que la imágen final está en BGR.
 
-For lightness/value/intensity, the three spaces use slightly different representations.
-
-Intensity is computed by simply averaging the RGB values: (1/3)⋅(R+G+B).
-Value is the simplest, being the value of the maximum of RGB: max(R,G,B).
-When used in subsequent calculations, L/V/I is scaled to a decimal between 0 and 1.
-
-Saturation is where the three models differ the most. For all 3, if I/V/L is 0, then saturation is 0 (this is for black, so that its representation is unambiguous), and HSL additionally sets saturation to 0 if lightness is maximum (because for HSL maximum lightness means white).
-
-HSL and HSV account for both the minimum and maximum of RGB, taking the difference between the two: max(R,G,B) - min(R,G,B), this value is sometimes referred to as chroma (C).
-HSV then takes the chroma and divides it by the value to get the saturation: C/V.
-HSI doesn't use chroma explicitly, instead only taking min(R,G,B) into account: 1 - min(R,G,B)/I.
+Con esto ya podemos explicar porque la imagen tiene esos colores oscuros sobre todo en el fondo blanco, ya que la media de (255,255,255) es igual al valor máximo. Y luego los tonos amarillentos y verdosos se explican por las diferencias de calculo de los canales S y V e I.
 
 - ¿Qué se observa en la imagen resultado de la opción 6 y en qué influye que se varíe el
 valor del filtro?
 
+En la imagen resultado de la opción 6 se muestran los bordes de algunos de los objetos más significativos de la imágen.
+
+Cunado el filtro tiene el valor 0, es decir, sin filtro, la imágen resultante solo consiste de los objetosmás oscuros de la opción 5.
+
+![Sin filtro](img/im6_0.png)
+
+Mientras que según aumenta el filtro se muestran de manera más clara los bordes de los objetos significativos de la imágen, como las sillas, los cuadros de la pared, la papelera o el candelábro.
+
+![Filtro al 100%](img/im6_100.png)
+
+También es importante ver que cuando el filtro se encuentra en un valor intermedio, la imagen resultante tiende a ser blanca, y no se puede apreciar ningún objeto.
+
+![Filtro al 50%](img/im6_50.png)
 ## FAQs:
 
 * /usr/bin/ld shows libraries conflicts between two versions:

@@ -23,6 +23,7 @@
 #define PI 3.14159265
 
 bool has_window = false;
+bool show_debug = false;
 
 typedef enum _filterMode {
   LOW_PASS_FILTER = 0,
@@ -40,6 +41,16 @@ void initWindow()
   // create Trackbar and add to a window
   cv::createTrackbar("Option [0-6]", "window_name", nullptr, 6, 0); 
   cv::createTrackbar("Filter Value [0-100]", "window_name", nullptr, 100, 0); 
+}
+
+void hideDebug() {
+  if (show_debug) {
+    cv::destroyWindow("remove_filter");
+    cv::destroyWindow("keep_filter");
+    cv::destroyWindow("remove_filter_bw");
+    cv::destroyWindow("keep_filter_bw");
+  }
+  show_debug = false;
 }
 
 // Convert from RGB to HSI
@@ -61,7 +72,8 @@ cv::Mat rgbToHSI(const cv::Mat & rgb_image)
 
       if (b > g) H = 2*PI - H;
 
-      hsi.at<cv::Vec3b>(i, j)[0] = (H * 180)/ PI ;
+      hsi.at<cv::Vec3b>(i, j)[0] = ((H * 180)/ PI) ;
+      // hsi.at<cv::Vec3b>(i, j)[0] = 255*((H * 180)/ PI)/360 ;
       hsi.at<cv::Vec3b>(i, j)[1] = S*255;
       hsi.at<cv::Vec3b>(i, j)[2] = I;
     }
@@ -199,17 +211,20 @@ const
   {
   case 0:
   {
+    hideDebug();
     cv::imshow("window_name", out_image_rgb);
     break;
   }
   case 1:
   {
+    hideDebug();
     cv::Mat HSI_image = rgbToHSI(in_image_rgb);
     cv::imshow("window_name", HSI_image);
     break;
   }
   case 2:
   {
+    hideDebug();
     cv::Mat HSV_image;
     cv::Mat HSI_image = rgbToHSI(in_image_rgb);
     cv::cvtColor(out_image_rgb, HSV_image, cv::COLOR_BGR2HSV);
@@ -233,11 +248,12 @@ const
     cv::Mat new_image;
     cv::merge(final_channels, new_image);
 
-    cv::imshow("window_name", result_iv);;
+    cv::imshow("window_name", new_image);;
     break;
   }
   case 3:
   {
+    hideDebug();
     cv::Mat BW_opencv;
     cv::cvtColor(out_image_rgb, BW_opencv, cv::COLOR_RGB2GRAY);
     // Compute the Discrete fourier transform
@@ -251,6 +267,7 @@ const
   }
   case 4:
   {
+    hideDebug();
     cv::Mat BW_opencv;
     cv::cvtColor(out_image_rgb, BW_opencv, cv::COLOR_RGB2GRAY);
     // Compute the Discrete fourier transform
@@ -274,6 +291,7 @@ const
   }
   case 5:
   {
+    hideDebug();
     cv::Mat BW_opencv;
     cv::cvtColor(out_image_rgb, BW_opencv, cv::COLOR_RGB2GRAY);
     // Compute the Discrete fourier transform
@@ -298,7 +316,67 @@ const
   }
   case 6:
   {
-    cv::imshow("window_name", out_image_rgb);
+    cv::Mat BW_opencv;
+    cv::cvtColor(out_image_rgb, BW_opencv, cv::COLOR_RGB2GRAY);
+    // Compute the Discrete fourier transform
+    cv::Mat complexImg = computeDFT(BW_opencv);
+    cv::Mat complexImg_5 = complexImg.clone();
+
+    // Crop and rearrange
+    cv::Mat shift_complex_4 = fftShift(complexImg); // Rearrange quadrants - Spectrum with low
+    cv::Mat shift_complex_5 = fftShift(complexImg_5); // Rearrange quadrants - Spectrum with low
+
+    cv::Mat filter_4 = createHorizFilter(in_image_rgb, LOW_PASS_FILTER,
+                     cv::getTrackbarPos("Filter Value [0-100]", "window_name"));
+
+    cv::Mat filter_5 = createHorizFilter(in_image_rgb, HIGH_PASS_FILTER,
+                     cv::getTrackbarPos("Filter Value [0-100]", "window_name"));
+
+    cv::mulSpectrums(shift_complex_4,filter_4,shift_complex_4,0);
+    cv::mulSpectrums(shift_complex_5,filter_5,shift_complex_5,0);
+    cv::Mat rearrange_4 = fftShift(shift_complex_4);
+    cv::Mat rearrange_5 = fftShift(shift_complex_5);
+
+    // Get the spectrum
+    cv::Mat inverseTransform_4;
+    cv::idft(rearrange_4, inverseTransform_4, cv::DFT_INVERSE | cv::DFT_REAL_OUTPUT);
+    cv::normalize(inverseTransform_4, inverseTransform_4, 0, 1, cv::NORM_MINMAX);
+
+    cv::Mat inverseTransform_5;
+    cv::idft(rearrange_5, inverseTransform_5, cv::DFT_INVERSE | cv::DFT_REAL_OUTPUT);
+    cv::normalize(inverseTransform_5, inverseTransform_5, 0, 1, cv::NORM_MINMAX);
+
+    for (int i = 0; i < inverseTransform_4.rows; i++) {
+      for (int j = 0; j < inverseTransform_4.cols; j++) {
+        inverseTransform_4.at<float>(i,j) = inverseTransform_4.at<float>(i,j) > 0.6 ? 255 : 0;
+      }
+    }
+
+    for (int i = 0; i < inverseTransform_5.rows; i++) {
+      for (int j = 0; j < inverseTransform_5.cols; j++) {
+        inverseTransform_5.at<float>(i,j) = inverseTransform_5.at<float>(i,j) > 0.4 ? 255 : 0;
+      }
+    }
+
+    // OR
+    cv::Mat Or_opencv;
+    bitwise_or(inverseTransform_4, inverseTransform_5, Or_opencv);
+    cv::imshow("window_name", Or_opencv);
+
+    if (cv::waitKey(1) == 'd') {
+      if (show_debug) {
+        hideDebug();
+      } else {
+        show_debug = true;
+      }
+    }
+
+    if (show_debug) {
+      cv::imshow("remove_filter", spectrum(rearrange_5));
+      cv::imshow("keep_filter", spectrum(rearrange_4));
+      cv::imshow("remove_filter_bw", inverseTransform_5);
+      cv::imshow("keep_filter_bw", inverseTransform_4);
+    }
     break;
   }
   default:

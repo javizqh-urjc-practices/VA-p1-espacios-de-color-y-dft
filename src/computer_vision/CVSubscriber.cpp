@@ -508,7 +508,7 @@ const
     key_pressed = true;
   }
 
-  // If change of mode OR closing in mode 6 -> close
+  // If change of mode OR closing in mode 7 -> close
   if ((CVParams::extra_active && mode_param != 6) || (key_pressed && CVParams::extra_active)) {
     CVFunctions::hideDebug();
     CVParams::extra_active = false;

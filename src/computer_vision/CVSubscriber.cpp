@@ -22,6 +22,9 @@
 #include "rclcpp/rclcpp.hpp"
 
 
+// -------- DFT Imported Functions ----------------------------------------------
+// Copied because it is only allowed to edit this file
+
 // Compute the Discrete fourier transform
 cv::Mat computeDFT(const cv::Mat &image)
 {
@@ -71,13 +74,6 @@ cv::Mat fftShift(const cv::Mat & magI)
   return magI_copy;
 }
 
-inline float rgb2hue(const float r, const float g, const float b){
-  return std::acos(
-    ( ((r-g) + (r-b))/2 )/
-    ( std::sqrt((std::pow(r-g,2) + (r-b)*(g-b))) )
-  );
-
-}
 
 // Calculate dft spectrum
 cv::Mat spectrum(const cv::Mat & complexI)
@@ -104,17 +100,28 @@ cv::Mat spectrum(const cv::Mat & complexI)
   return spectrum;
 }
 
+
+// -------- Parameters ----------------------------------------------
+
+
 namespace CVParams {
 
   inline bool running = false;
-  bool key_pressed = false;
+  bool extra_active = false;
+
   inline std::string WINDOW_NAME = "Practica_5";
   inline std::string WINDOW_A_NAME = "Umbral A (ex.6)";
   inline std::string WINDOW_A_SPEC_NAME = "Spectrum A (ex.6)";
   inline std::string WINDOW_B_NAME = "Umbral B (ex.6)";
   inline std::string WINDOW_B_SPEC_NAME = "Spectrum B (ex.6)";
 
+  inline std::string MODE = "Option [0-6]";
+  inline std::string FILTER = "Filter Strength [0-100]";
+
+  inline char WIN_KEY = 'd';
+
   int MAX_STRENGH = 100;
+  float PI = 3.14159265;
   float UMBRAL_CASE_4 = 0.6;
   float UMBRAL_CASE_5 = 0.4;
   
@@ -125,10 +132,28 @@ namespace CVParams {
     OUTSIDE
   };
 
+  typedef enum _filterMode {
+    LOW_PASS_FILTER = 0,
+    HIGH_PASS_FILTER
+  } filterMode;
+
 }
+
+// -------- Inline Functions ----------------------------------------------
+
+inline float rgb2hue(const float r, const float g, const float b){
+  return std::acos(
+    ( ((r-g) + (r-b))/2 )/
+    ( std::sqrt((std::pow(r-g,2) + (r-b)*(g-b))) )
+  );
+
+}
+
+// -------- Self-Made Functions ----------------------------------------------
 namespace CVFunctions {
 
 std::vector<cv::Mat> multichannelDFT(const cv::Mat &image_rgb){
+  // [DEPRECATED] Used to compute DFT channel by chhanel.
 
   // Declarations
   std::vector<cv::Mat> input_channels;
@@ -144,8 +169,9 @@ std::vector<cv::Mat> multichannelDFT(const cv::Mat &image_rgb){
 }
 
 
-
 cv::Mat complex_channels2RGBspectrum(const std::vector<cv::Mat>& complex_channels)
+// [DEPRECATED] Used to combine multiple DFT comples channels 
+// into an RGB Spectrum image
 {
     cv::Mat result;
     std::vector<cv::Mat> spectrums;
@@ -158,41 +184,38 @@ cv::Mat complex_channels2RGBspectrum(const std::vector<cv::Mat>& complex_channel
     return result;
 }
 
-cv::Mat BGR2HSI(const cv::Mat & image){
+cv::Mat bgr2hsi(const cv::Mat & rgb_image)
+// Used to convert an image from BGR channels to HSI
+{
+  double r,g,b;
+  double H,S,I;
+  cv::Mat hsi(rgb_image.rows, rgb_image.cols, rgb_image.type());
 
-  cv::Mat hsi_mat = cv::Mat::zeros(image.size(), image.type());
-  float r, g, b, h, s, i;
+  for (int i = 0; i < rgb_image.rows; i++) {
+    for (int j = 0; j < rgb_image.cols; j++) {
+      b = (double) rgb_image.at<cv::Vec3b>(i,j)[0];
+      g = (double) rgb_image.at<cv::Vec3b>(i,j)[1];
+      r = (double) rgb_image.at<cv::Vec3b>(i,j)[2];
 
-  for (int u = 0; u < image.rows; u++) {
-    for (int v = 0; v < image.cols; v++) {
+      H = rgb2hue(r,g,b);
+      S = 1 - ((3.0 * std::min(r, std::min(b,g)) / (r+g+b)));
+      I = (r+g+b) / 3.0;
 
-      b = ((float)image.at<cv::Vec3b>(u,v)[0]) / 255;
-      g = ((float)image.at<cv::Vec3b>(u,v)[1]) / 255;
-      r = ((float)image.at<cv::Vec3b>(u,v)[2]) / 255;
+      if (b > g) H = 2*CVParams::PI - H;
 
-      h = rgb2hue(r,g,b);
-      if (r + g + b != 0) {
-        s = 1 - 3 * std::min({r, g, b}) / (r + g + b);
-      }else{
-        s = 0;
-      }
-      i = (r+g+b)/3;
-
-      if (b > g) {
-        h = 360 - h;
-      }
-
-      hsi_mat.at<cv::Vec3b>(u,v)[0] = h*255/360;
-      hsi_mat.at<cv::Vec3b>(u,v)[1] = s*255;
-      hsi_mat.at<cv::Vec3b>(u,v)[2] = i*255;
+      hsi.at<cv::Vec3b>(i, j)[0] = ((H * 180)/ CVParams::PI) ;
+      // hsi.at<cv::Vec3b>(i, j)[0] = 255*((H * 180)/ PI)/360 ;
+      hsi.at<cv::Vec3b>(i, j)[1] = S*255;
+      hsi.at<cv::Vec3b>(i, j)[2] = I;
     }
   }
 
-  return hsi_mat;
-
+  return hsi;
 }
 
 cv::Mat substract_channels(const cv::Mat & mat1, const cv::Mat & mat2) {
+  // Used to make H1 - H2 where [H1,H2] are multiple channeled images
+  // ¿Directly H1 - H2 not allowed by specifications?
 
   std::vector<cv::Mat> channels1;
   std::vector<cv::Mat> channels2;
@@ -213,7 +236,9 @@ cv::Mat substract_channels(const cv::Mat & mat1, const cv::Mat & mat2) {
 }
 
 cv::Mat filter(const cv::Mat &image, float strength, CVParams::FILTER_PARAMS direction, CVParams::FILTER_PARAMS mode) {
-    // Warning: Asumes complex images as input
+  // [DEPRECATED] Generates a rectangle and remove the intersection between the imagen and the filter
+  // Reason: Not practical in exercise 6, improved with build_filter()
+  // Warning: Asumes complex images as input
 
     int start, end;
     cv::Mat result = cv::Mat::zeros(image.size(), image.type());
@@ -244,7 +269,43 @@ cv::Mat filter(const cv::Mat &image, float strength, CVParams::FILTER_PARAMS dir
     return result;
 }
 
+cv::Mat createHorizFilter(const cv::Mat &image, const CVParams::filterMode mode,
+                          const int slider_val)
+// [DEPRECATED] Builds only a rectangle based filter matrix.
+// Improved with build_filter()
+{
+  float inside = (float) 0;  // Values inside the box
+  float outside = (float) 0; // Values outside the box
+
+  if (mode == CVParams::LOW_PASS_FILTER) inside = 1;
+  else if (mode == CVParams::HIGH_PASS_FILTER) outside = 1;
+
+  cv::Mat tmp(image.rows, image.cols, CV_32F);
+  cv::Point center(image.rows / 2, image.cols / 2); // Is always even
+
+  for (int i = 0; i < image.rows; i++) {
+    for (int j = 0; j < image.cols; j++) {
+      if (i > center.x - slider_val && i < center.x + slider_val ) {
+        tmp.at<float>(i, j) = inside;
+      } else {
+        tmp.at<float>(i, j) = outside;
+      }
+    }
+  }
+
+  cv::Mat toMerge[] = {tmp, tmp};
+  cv::Mat horiz_Filter;
+  cv::merge(toMerge, 2, horiz_Filter);
+
+  return horiz_Filter;
+}
+
 cv::Mat build_filter(const cv::Mat &image, float strength, CVParams::FILTER_PARAMS direction, CVParams::FILTER_PARAMS mode) {
+    // Builds a filter matrix given the following parameters:
+    // -> Image: For exact dimension specifications
+    // -> Strength: Percentage of the image to be filtered
+    // -> Direction: Building orientation -> VERTICAL/HORIZONTAL
+    // -> Mode: Reversed building: Inside/Outside Filtering
     // Warning: Asumes complex images as input
 
     int start, end;
@@ -291,28 +352,50 @@ cv::Mat umbral(const cv::Mat& input, float ratio) {
   return result;
 }
 
+// -------- Window Management Functions ----------------------------------------------
+void initWindow()
+// Create window at the beggining
+{
+  if (CVParams::running) return;
+  CVParams::running = true;
+
+  // Show images in a different windows
+  cv::namedWindow(CVParams::WINDOW_NAME);
+  // create Trackbar and add to a window
+  cv::createTrackbar(CVParams::MODE, CVParams::WINDOW_NAME, nullptr, 6, 0); 
+  cv::createTrackbar(CVParams::FILTER, CVParams::WINDOW_NAME, nullptr, 100, 0); 
 }
 
+void hideDebug() {
+  cv::destroyWindow(CVParams::WINDOW_A_NAME);
+  cv::destroyWindow(CVParams::WINDOW_B_NAME);
+  cv::destroyWindow(CVParams::WINDOW_A_SPEC_NAME);
+  cv::destroyWindow(CVParams::WINDOW_B_SPEC_NAME);
+}
+
+}
+
+// -------- Main Function ----------------------------------------------
 
 namespace computer_vision
 {
 
-/**
-   TO-DO: Default - the output images and pointcloud are the same as the input
- */
 CVGroup CVSubscriber::processing(
   const cv::Mat in_image_rgb,
   const cv::Mat in_image_depth,
   const pcl::PointCloud<pcl::PointXYZRGB> in_pointcloud)
 const
 {
-  // Create output images
+
+  // Declarations
   cv::Mat out_image_rgb, out_image_depth, preprocessed_image, hsv, hsi, complex_image, filtered_image, gray_image;
   cv::Mat image_ab, filter_a, filter_b, filter, filtered_complex_image, complex_a, complex_b;
-
   std::vector<cv::Mat> dft_channels;
-  int strength;
   CVParams::FILTER_PARAMS mode, direction;
+  int strength;
+  int mode_param;
+
+  // Initiailizing
   cv::Mat spectrum_a = cv::Mat::zeros(in_image_rgb.size(), in_image_rgb.type());
   cv::Mat spectrum_b = cv::Mat::zeros(in_image_rgb.size(), in_image_rgb.type());
   cv::Mat image_a = cv::Mat::zeros(in_image_rgb.size(), in_image_rgb.type());
@@ -327,66 +410,52 @@ const
   out_pointcloud = in_pointcloud;
 
   // First time execution
-  if (!CVParams::running) {
-
-    CVParams::running = true;
-
-    cv::namedWindow(CVParams::WINDOW_NAME);
-    // create Trackbar and add to a window
-    cv::createTrackbar("mode", CVParams::WINDOW_NAME, nullptr, 6, 0);
-    cv::createTrackbar("filter_value", CVParams::WINDOW_NAME, nullptr, CVParams::MAX_STRENGH, 0);
-  }
+  CVFunctions::initWindow();
 
   // Obtaining Parameter
-  strength = cv::getTrackbarPos("filter_value", CVParams::WINDOW_NAME);
+  strength = cv::getTrackbarPos(CVParams::FILTER, CVParams::WINDOW_NAME);
+  mode_param = cv::getTrackbarPos(CVParams::MODE, CVParams::WINDOW_NAME);
     
-  switch (cv::getTrackbarPos("mode", CVParams::WINDOW_NAME))
+  switch (mode_param)
   {
+  
+  // Convert Image to HSI 
   case 1:
-    preprocessed_image = CVFunctions::BGR2HSI(in_image_rgb);
+    preprocessed_image = CVFunctions::bgr2hsi(in_image_rgb);
     break;
 
+  // Convert Image to HSI and show HSV-HSI 
   case 2:
-
     cv::cvtColor(in_image_rgb, hsv, cv::COLOR_BGR2HSV);
-    hsi = CVFunctions::BGR2HSI(in_image_rgb);
+    hsi = CVFunctions::bgr2hsi(in_image_rgb);
     preprocessed_image = CVFunctions::substract_channels(hsv, hsi);
     break;
 
+  // Show Spectrum
   case 3:
-
     cv::cvtColor(in_image_rgb, preprocessed_image, cv::COLOR_RGB2GRAY);
     complex_image = computeDFT(preprocessed_image);
     preprocessed_image = spectrum(complex_image);
     break;
 
+
+  // Case 4: Maintain Horizontal Frecuencies
+  // Case 5: Remove Horizontal Frecuencies
+  // Code designed to be reused
   case 4:
   case 5:
 
-
-    if (cv::getTrackbarPos("mode", CVParams::WINDOW_NAME) == 4) {
-
-      // Maintain only main horizontal 
-      direction = CVParams::HORIZONTAL;
-      mode = CVParams::OUTSIDE;
-
-    } else {
-
-      // Remove only main horizontal 
-      direction = CVParams::HORIZONTAL;
-      mode = CVParams::INSIDE;
-
-    }
+    // Selecting Filtering Matrix Parameters
+    mode = mode_param == 4 ? CVParams::OUTSIDE : CVParams::INSIDE;
+    direction = CVParams::HORIZONTAL;
 
     // Changing to GrayScale
     cv::cvtColor(in_image_rgb, gray_image, cv::COLOR_RGB2GRAY);
 
-    // Preprocessing
+    // Filtering Spectrum 
     complex_image = fftShift(computeDFT(gray_image));
-
     filter = CVFunctions::build_filter(complex_image, (float)strength/CVParams::MAX_STRENGH, direction, mode);
     cv::mulSpectrums(complex_image, filter, filtered_complex_image, 0);
-
     complex_image = fftShift(filtered_complex_image);
     cv::idft(complex_image, filtered_image, cv::DFT_INVERSE | cv::DFT_REAL_OUTPUT);
 
@@ -395,6 +464,7 @@ const
 
     break;
 
+  // Case 4 + Case 5 + Umbralizing + OR
   case 6:
 
     // Changing to GrayScale
@@ -432,15 +502,26 @@ const
     break;
   }
 
-  if (cv::waitKey(5) == 'd') {
-    CVParams::key_pressed = !CVParams::key_pressed;
+  // Show Windows
+  bool key_pressed = false;
+  if (mode_param == 6 && cv::waitKey(5) == CVParams::WIN_KEY) {
+    key_pressed = true;
   }
 
-  if (CVParams::key_pressed) {
+  // If change of mode OR closing in mode 6 -> close
+  if ((CVParams::extra_active && mode_param != 6) || (key_pressed && CVParams::extra_active)) {
+    CVFunctions::hideDebug();
+    CVParams::extra_active = false;
+    key_pressed = false;
+  }
+
+  // If pressed and not not active -> Open
+  if (key_pressed && !CVParams::extra_active) {
     cv::imshow(CVParams::WINDOW_A_NAME, image_a);
     cv::imshow(CVParams::WINDOW_B_NAME, image_b);
     cv::imshow(CVParams::WINDOW_A_SPEC_NAME, spectrum_a);
     cv::imshow(CVParams::WINDOW_B_SPEC_NAME, spectrum_b);
+    CVParams::extra_active = true;
   }
 
   cv::imshow(CVParams::WINDOW_NAME, preprocessed_image);

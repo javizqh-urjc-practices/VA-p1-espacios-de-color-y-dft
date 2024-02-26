@@ -107,7 +107,12 @@ cv::Mat spectrum(const cv::Mat & complexI)
 namespace CVParams {
 
   inline bool running = false;
+  bool key_pressed = false;
   inline std::string WINDOW_NAME = "Practica_5";
+  inline std::string WINDOW_A_NAME = "Umbral A (ex.6)";
+  inline std::string WINDOW_A_SPEC_NAME = "Spectrum A (ex.6)";
+  inline std::string WINDOW_B_NAME = "Umbral B (ex.6)";
+  inline std::string WINDOW_B_SPEC_NAME = "Spectrum B (ex.6)";
 
   int MAX_STRENGH = 100;
   float UMBRAL_CASE_4 = 0.6;
@@ -239,15 +244,47 @@ cv::Mat filter(const cv::Mat &image, float strength, CVParams::FILTER_PARAMS dir
     return result;
 }
 
+cv::Mat build_filter(const cv::Mat &image, float strength, CVParams::FILTER_PARAMS direction, CVParams::FILTER_PARAMS mode) {
+    // Warning: Asumes complex images as input
+
+    int start, end;
+    cv::Mat result = cv::Mat::zeros(image.size(), image.type());
+
+    strength = std::max(0.0f, std::min(1.0f, strength));
+
+    float insideMultiplier = mode == CVParams::INSIDE ? 0.0f : 1.0f;
+    float outsideMultiplier = 1.0f - insideMultiplier;
+
+    int target = direction == CVParams::VERTICAL ? image.cols : image.rows;
+
+    int deleted = static_cast<int>(strength * (target / 2.0));
+    start = std::max(target / 2 - deleted, 0);
+    end = std::min(target / 2 + deleted, image.cols);
+
+    int i, j = 0;
+    int& line = direction == CVParams::VERTICAL ? j : i;
+
+    for (i = 0; i < result.rows; i++) {
+        for (j = 0; j < result.cols; j++) {
+            if (line >= start && line < end) {
+                result.at<cv::Vec2f>(i, j) = cv::Vec2f(insideMultiplier, insideMultiplier);
+            } else {
+                result.at<cv::Vec2f>(i, j) = cv::Vec2f(outsideMultiplier, outsideMultiplier);
+            }
+        }
+    }
+
+    return result;
+}
+
 cv::Mat umbral(const cv::Mat& input, float ratio) {
   // Warning: Assumes 1 Channel input image
 
   cv::Mat result = cv::Mat::zeros(input.size(), input.type());
-  int bound = static_cast<int>(ratio*255);
 
   for (int i = 0; i < result.rows; i++) {
       for (int j = 0; j < result.cols; j++) {
-          result.at<float>(i, j) = input.at<float>(i,j) > bound ? 255 : 0;
+          result.at<float>(i, j) = input.at<float>(i,j) > ratio ? 255 : 0;
       }
   }
 
@@ -270,11 +307,16 @@ CVGroup CVSubscriber::processing(
 const
 {
   // Create output images
-  cv::Mat out_image_rgb, out_image_depth, preprocessed_image, hsv, hsi, complex_image, filtered_image;
-  cv::Mat image_a, image_b, image_ab;
+  cv::Mat out_image_rgb, out_image_depth, preprocessed_image, hsv, hsi, complex_image, filtered_image, gray_image;
+  cv::Mat image_ab, filter_a, filter_b, filter, filtered_complex_image, complex_a, complex_b;
+
   std::vector<cv::Mat> dft_channels;
   int strength;
   CVParams::FILTER_PARAMS mode, direction;
+  cv::Mat spectrum_a = cv::Mat::zeros(in_image_rgb.size(), in_image_rgb.type());
+  cv::Mat spectrum_b = cv::Mat::zeros(in_image_rgb.size(), in_image_rgb.type());
+  cv::Mat image_a = cv::Mat::zeros(in_image_rgb.size(), in_image_rgb.type());
+  cv::Mat image_b = cv::Mat::zeros(in_image_rgb.size(), in_image_rgb.type());
 
   // Create output pointcloud
   pcl::PointCloud<pcl::PointXYZRGB> out_pointcloud;
@@ -294,6 +336,9 @@ const
     cv::createTrackbar("mode", CVParams::WINDOW_NAME, nullptr, 6, 0);
     cv::createTrackbar("filter_value", CVParams::WINDOW_NAME, nullptr, CVParams::MAX_STRENGH, 0);
   }
+
+  // Obtaining Parameter
+  strength = cv::getTrackbarPos("filter_value", CVParams::WINDOW_NAME);
     
   switch (cv::getTrackbarPos("mode", CVParams::WINDOW_NAME))
   {
@@ -309,9 +354,6 @@ const
     break;
 
   case 3:
-//    RGB Spectrum
-//    dft_channels = CVFunctions::multichannelDFT(in_image_rgb);
-//    preprocessed_image = CVFunctions::complex_channels2spectrum(dft_channels);
 
     cv::cvtColor(in_image_rgb, preprocessed_image, cv::COLOR_RGB2GRAY);
     complex_image = computeDFT(preprocessed_image);
@@ -321,64 +363,68 @@ const
   case 4:
   case 5:
 
-    // Obtaining Parameter
-    strength = cv::getTrackbarPos("filter_value", CVParams::WINDOW_NAME);
 
     if (cv::getTrackbarPos("mode", CVParams::WINDOW_NAME) == 4) {
 
       // Maintain only main horizontal 
-      direction = CVParams::VERTICAL;
+      direction = CVParams::HORIZONTAL;
       mode = CVParams::OUTSIDE;
 
     } else {
 
       // Remove only main horizontal 
       direction = CVParams::HORIZONTAL;
-      mode = CVParams::OUTSIDE;
+      mode = CVParams::INSIDE;
 
     }
 
     // Changing to GrayScale
-    cv::cvtColor(in_image_rgb, preprocessed_image, cv::COLOR_RGB2GRAY);
+    cv::cvtColor(in_image_rgb, gray_image, cv::COLOR_RGB2GRAY);
 
     // Preprocessing
-    complex_image = fftShift(computeDFT(preprocessed_image));
-    filtered_image = CVFunctions::filter(complex_image, (float)strength/CVParams::MAX_STRENGH, direction, mode);
-    complex_image = fftShift(filtered_image);
-    cv::idft(complex_image, preprocessed_image, cv::DFT_INVERSE | cv::DFT_REAL_OUTPUT);
+    complex_image = fftShift(computeDFT(gray_image));
+
+    filter = CVFunctions::build_filter(complex_image, (float)strength/CVParams::MAX_STRENGH, direction, mode);
+    cv::mulSpectrums(complex_image, filter, filtered_complex_image, 0);
+
+    complex_image = fftShift(filtered_complex_image);
+    cv::idft(complex_image, filtered_image, cv::DFT_INVERSE | cv::DFT_REAL_OUTPUT);
 
     // Normalizing
-    cv::normalize(preprocessed_image, preprocessed_image, 0, 1, cv::NORM_MINMAX);
+    cv::normalize(filtered_image, preprocessed_image, 0, 1, cv::NORM_MINMAX);
 
     break;
 
   case 6:
 
-    // Obtaining Parameter
-    strength = cv::getTrackbarPos("filter_value", CVParams::WINDOW_NAME);
-
     // Changing to GrayScale
-    cv::cvtColor(in_image_rgb, preprocessed_image, cv::COLOR_RGB2GRAY);
+    cv::cvtColor(in_image_rgb, gray_image, cv::COLOR_RGB2GRAY);
+    complex_image = fftShift(computeDFT(gray_image));
 
-    // Preprocessing image case 4 -> image_a
-    complex_image = fftShift(computeDFT(preprocessed_image));
-    filtered_image = CVFunctions::filter(complex_image, (float)strength/CVParams::MAX_STRENGH, CVParams::VERTICAL, CVParams::OUTSIDE);
-    complex_image = fftShift(filtered_image);
-    cv::idft(complex_image, image_a, cv::DFT_INVERSE | cv::DFT_REAL_OUTPUT);
+     // Building Filters
+    filter_a = CVFunctions::build_filter(complex_image, (float)strength/CVParams::MAX_STRENGH, CVParams::HORIZONTAL, CVParams::OUTSIDE);
+    filter_b = CVFunctions::build_filter(complex_image, (float)strength/CVParams::MAX_STRENGH, CVParams::HORIZONTAL, CVParams::INSIDE);
 
-    // Preprocessing image case 5 -> image_b
-    complex_image = fftShift(computeDFT(preprocessed_image));
-    filtered_image = CVFunctions::filter(complex_image, (float)strength/CVParams::MAX_STRENGH, CVParams::HORIZONTAL, CVParams::OUTSIDE);
-    complex_image = fftShift(filtered_image);
-    cv::idft(complex_image, image_b, cv::DFT_INVERSE | cv::DFT_REAL_OUTPUT);
+    cv::mulSpectrums(complex_image, filter_a, complex_a, 0);
+    cv::mulSpectrums(complex_image, filter_b, complex_b, 0);
+
+    spectrum_a = spectrum(fftShift(complex_a));
+    spectrum_b = spectrum(fftShift(complex_b));
+
+    // Returning to bgr image
+    cv::idft(fftShift(complex_a), image_a, cv::DFT_INVERSE | cv::DFT_REAL_OUTPUT);
+    cv::idft(fftShift(complex_b), image_b, cv::DFT_INVERSE | cv::DFT_REAL_OUTPUT);
+
+    // Normalizing
+    cv::normalize(image_a, image_a, 0, 1, cv::NORM_MINMAX);
+    cv::normalize(image_b, image_b, 0, 1, cv::NORM_MINMAX);
 
     // Umbralizing
     image_a = CVFunctions::umbral(image_a,CVParams::UMBRAL_CASE_4);
     image_b = CVFunctions::umbral(image_b,CVParams::UMBRAL_CASE_5);
 
     // OR
-    cv::multiply(image_a, image_b, image_ab);
-    preprocessed_image = cv::Scalar::all(255) - image_ab;
+    cv::bitwise_or(image_a, image_b, preprocessed_image);
     break;
 
   default:
@@ -386,6 +432,16 @@ const
     break;
   }
 
+  if (cv::waitKey(5) == 'd') {
+    CVParams::key_pressed = !CVParams::key_pressed;
+  }
+
+  if (CVParams::key_pressed) {
+    cv::imshow(CVParams::WINDOW_A_NAME, image_a);
+    cv::imshow(CVParams::WINDOW_B_NAME, image_b);
+    cv::imshow(CVParams::WINDOW_A_SPEC_NAME, spectrum_a);
+    cv::imshow(CVParams::WINDOW_B_SPEC_NAME, spectrum_b);
+  }
 
   cv::imshow(CVParams::WINDOW_NAME, preprocessed_image);
   cv::waitKey(1);

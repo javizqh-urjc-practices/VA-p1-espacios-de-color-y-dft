@@ -516,7 +516,7 @@ const
   }
 
   // If pressed and not not active -> Open
-  if (key_pressed && !CVParams::extra_active) {
+  if (key_pressed || CVParams::extra_active) {
     cv::imshow(CVParams::WINDOW_A_NAME, image_a);
     cv::imshow(CVParams::WINDOW_B_NAME, image_b);
     cv::imshow(CVParams::WINDOW_A_SPEC_NAME, spectrum_a);

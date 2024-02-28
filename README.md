@@ -35,17 +35,21 @@ valor del filtro?
 
 En la imagen resultado de la opción 6 se muestran los bordes de algunos de los objetos más significativos de la imágen.
 
-Cunado el filtro tiene el valor 0, es decir, sin filtro, la imágen resultante solo consiste de los objetosmás oscuros de la opción 5.
+Cunado el filtro tiene el valor 0, es decir, sin filtro, la imágen resultante solo consiste de los objetos más oscuros de la opción 5.
 
-![Sin filtro](img/im6_0.png)
+![Sin filtro](img/img6_0.png)
 
 Mientras que según aumenta el filtro se muestran de manera más clara los bordes de los objetos significativos de la imágen, como las sillas, los cuadros de la pared, la papelera o el candelábro.
 
-![Filtro al 100%](img/im6_100.png)
+![Filtro al 50%](img/img6_50.png)
 
-También es importante ver que cuando el filtro se encuentra en un valor intermedio, la imagen resultante tiende a ser blanca, y no se puede apreciar ningún objeto.
+Y al tomar el valor del 100%, es decir, con filtro en toda la imágen, la imágen resultante solo consiste de los objetos más oscuros de la opción 4, que generará una imagen más oscura que con el filtro al 0.
 
-![Filtro al 50%](img/im6_50.png)
+![Filtro al 100%](img/img6_100.png)
+
+También es importante ver que cuando el filtro se encuentra en un valor de un cuarto, la imagen resultante tiende a ser blanca, y no se puede apreciar ningún objeto.
+
+![Filtro al 25%](img/img6_25.png)
 ## FAQs:
 
 * /usr/bin/ld shows libraries conflicts between two versions:
